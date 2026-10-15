@@ -1,0 +1,18 @@
+# CSC_LINK and the Windows certificate sign the app bundle, which covers the unpacked ffmpeg.
+appId: dev.honya.app
+asar: true
+files:
+  - "**/*"
+  - "!build/ffmpeg/**"
+extraResources:
+  - from: build/ffmpeg/${os}
+    to: ffmpeg
+win:
+  target:
+    - nsis
+mac:
+  target:
+    - dmg
+linux:
+  target:
+    - AppImage

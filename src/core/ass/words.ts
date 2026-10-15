@@ -29,7 +29,7 @@ export function replaceWords(
 }
 
 function textTarget(pieces: readonly string[]): number | undefined {
-  let firstText: number | undefined
+  let lastText: number | undefined
   for (let index = 0; index < pieces.length; index += 1) {
     const piece = pieces[index]
     if (piece === undefined || isOverrideBlock(piece)) {
@@ -38,11 +38,9 @@ function textTarget(pieces: readonly string[]): number | undefined {
     if (piece.length > 0) {
       return index
     }
-    if (firstText === undefined) {
-      firstText = index
-    }
+    lastText = index
   }
-  return firstText
+  return lastText
 }
 
 function isOverrideBlock(piece: string): boolean {

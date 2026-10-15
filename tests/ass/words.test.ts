@@ -19,7 +19,7 @@ describe("replaceWords", () => {
   it("places words on a tag-only line", () => {
     expect(replaceWords("{\\an8}", "Olá.")).toEqual({
       ok: true,
-      raw: "Olá.{\\an8}",
+      raw: "{\\an8}Olá.",
     })
   })
 

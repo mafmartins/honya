@@ -9,7 +9,7 @@ Each release publishes the matching ffmpeg source tarball and the configure flag
 Build without GPL-only or nonfree components:
 
 ```text
-./configure --disable-gpl --disable-nonfree --disable-programs --disable-doc --enable-encoder=png
+./configure --disable-gpl --disable-nonfree --enable-static --disable-shared --disable-ffplay --disable-ffprobe --disable-doc --enable-encoder=png
 ```
 
 Do not pass `--enable-gpl` or `--enable-nonfree`.

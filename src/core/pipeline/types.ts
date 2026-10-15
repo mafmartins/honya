@@ -6,3 +6,6 @@ export interface LineSignals {
 }
 
 export type Preset = "save" | "balanced" | "best"
+
+export type ProviderId = "claude" | "gpt" | "gemini" | "mistral"
+export type Variant = "pt-pt" | "pt-br"

@@ -1,0 +1,31 @@
+---
+description: Strict TypeScript with no any and no type escapes
+alwaysApply: true
+---
+
+# Strict TypeScript
+
+Compile with `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`. Lint fails on an explicit `any`.
+
+Do not use:
+
+- `any`, including `as any` and `any[]`
+- `as unknown as SomeType`
+- `@ts-ignore` and `@ts-expect-error`
+- a trailing `!` non-null assertion
+- `eslint-disable` for a TypeScript rule
+
+Narrow with a type guard or by reading a field the library already types. `ass-compiler`'s `parse` returns `ParsedASS`. Use `Style`, `Name`, `Start`, `End`, `Text.raw`, and `Text.combined` from that type.
+
+Use:
+
+```ts
+const name: string = dialogue.Name
+```
+
+Do not use:
+
+```ts
+const dialogue = parse(text) as any
+const name = dialogue.Name!
+```

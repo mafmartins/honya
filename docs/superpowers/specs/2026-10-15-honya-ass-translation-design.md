@@ -20,6 +20,16 @@ The user brings their own key for one provider per session: Claude, GPT, Gemini,
 
 Out of scope for this version: speech or OCR from a raw video, translating signs, songs, or karaoke, SRT input, mixing providers inside one file, rebreaking lines to fit a cue, accounts, and sharing profiles between machines.
 
+## Stack
+
+Honya is an Electron app. The card UI and the product logic are TypeScript, and the window renders them with Electron's Chromium, so the screen matches on Linux, macOS, and Windows.
+
+ASS parsing, the style card, batching, escalation, notes, and the review rules are plain TypeScript modules. The test suite calls those modules directly. It does not open a window and it does not call a live provider.
+
+Electron `safeStorage` holds each provider key, using the OS key store. Model ids, profiles, and sessions are JSON files in the app data directory. A key is never written into those files.
+
+The installer ships one `ffmpeg` executable for the host platform: macOS, Windows, and a static Linux build. The binary sits outside the `asar` archive so the system can run it. Honya calls that path and does not search `PATH`. On macOS and Windows the binary is signed with the app. The build is LGPL, configured without GPL-only libraries, and each release publishes the `ffmpeg` source and the build flags. Honya uses it only to decode a video and write one image.
+
 ## Profiles
 
 Two layers, both stored on the machine.
@@ -42,7 +52,7 @@ Approach for this version: compile the style card, read the episode once, transl
 
 3. **Episode brief.** One pass over the English dialogue returns names, terms, jokes, who is speaking (from the ASS name field when it is filled in), lines that look hard, and lines likely to run long. When frames are selective, the brief also marks which cues need a picture. The brief seeds the glossary: each source term paired with the Portuguese form to reuse.
 
-4. **Frames.** If a video is attached, the user has already chosen none, only the marked lines, or every dialogue line. The frame grabber returns one image near the middle of a cue, and only for cues the setting includes. Images are sent with the call and then discarded.
+4. **Frames.** If a video is attached, the user has already chosen none, only the marked lines, or every dialogue line. The frame grabber runs the bundled `ffmpeg` and returns one image near the middle of a cue, and only for cues the setting includes. Images are sent with the call and then discarded.
 
 5. **Batches.** Dialogue is translated in batches of 25 lines. The last batch may be shorter. Each batch carries the style card, the brief, and the glossary. A glossary entry is a source term paired with the Portuguese form already chosen. Later batches reuse those forms, and new choices are added before the next batch starts. The cheap model returns the Portuguese and may mark a line as a doubt, a hard call, or a milder note. Tags are spliced back onto the translated words.
 
@@ -89,7 +99,7 @@ A failed call is retried with backoff. If a batch comes back with the wrong numb
 
 An event whose tags cannot be split safely is copied through unchanged, skipped by the model, and listed in a session report.
 
-A missing or unreadable video asks once whether to continue without pictures. One cue whose frame cannot be grabbed is translated from the text alone and named in the session report. Frame trouble does not add a note.
+A session that asked for frames does not start when the bundled `ffmpeg` is missing. The app reports a broken install. An unreadable video asks once whether to continue without pictures. One cue whose frame cannot be grabbed is translated from the text alone and named in the session report. Frame trouble does not add a note.
 
 If the app closes mid-batch, resume retries only that batch. Finished batches stay.
 
@@ -97,13 +107,13 @@ In assisted mode, a failed structural check keeps the edit on that line, withhol
 
 ## Testing
 
-The default suite never calls a live provider. A fake model returns scripted completions, including a short reply, a reply with the wrong number of lines, and a refusal.
+The default suite never calls a live provider and never opens an Electron window. A fake model returns scripted completions, including a short reply, a reply with the wrong number of lines, and a refusal.
 
 - **Script.** Fixture ASS files round-trip styles, timing, and override tags. Tag split and splice cover positioning and italics. Known dialogue names are classified as dialogue. An unknown name is left for the user. Signs, songs, and karaoke are copied through. A line over 17 characters per second is marked as not fitting. A note is appended outside the tags. An event whose tags cannot be split is copied unchanged.
 - **Library.** PT-PT and PT-BR cards stay separate. A series rule appears on that show's card and not on the other variant. Saving a rule marks the card stale, and the next load recompiles it. An empty profile still compiles. API keys never appear in a card or in an exported script.
 - **Pipeline.** Escalation is a pure function of the preset, the cheap-pass marks, the brief, and the fit check. Save, Balanced, and Best each have a table of cases, and every Best set contains its Balanced set, which contains its Save set. Batches hold 25 lines, except a shorter final batch, and pass glossary entries forward. A failed batch is retried, then escalated. If the strong reply is still unusable, the English text remains and the line carries `{note: tradução falhou}`. A session saved after batch two resumes at batch three.
 - **Review.** Open flags block export. Accepting a flag leaves the note in the text. A structural edit proposes the other lines and a rule. Declining the rule keeps the edit on the changed line. Export writes the notes and drops the flags.
-- **Preflight.** An unconfirmed style list, a missing key, or zero dialogue styles produces no model call.
+- **Preflight.** An unconfirmed style list, a missing key, zero dialogue styles, or a missing bundled `ffmpeg` when the session asked for frames produces no model call.
 
 ## Units
 
@@ -111,6 +121,6 @@ Five parts, each usable without reading the others.
 
 - **Library.** Keys, base profiles, series profiles, and style cards.
 - **Script.** ASS read and write, tag split and splice, style classification, fit check.
-- **Frames.** One image for one cue. Nothing else.
+- **Frames.** Runs the bundled `ffmpeg` and returns one image for one cue. Nothing else.
 - **Pipeline.** Brief, batches, escalation, and notes.
 - **Review.** Assisted mode only. Flags, edits, propagation, and rule offers.

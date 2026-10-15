@@ -362,7 +362,7 @@ async function grabFrames(
 
 function runFfmpeg(command: string, args: string[]): Promise<{ code: number; stdout: Uint8Array }> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] })
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "ignore"] })
     const chunks: Buffer[] = []
     let settled = false
     child.stdout.on("data", (chunk: unknown) => {

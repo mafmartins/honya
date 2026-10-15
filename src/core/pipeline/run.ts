@@ -5,17 +5,9 @@ import { applyTranslations } from "../ass/write"
 import type { StyleCard } from "../library/types"
 import { addGlossary, chunkDialogue, emptyGlossary, withGlossary, type Glossary } from "./batch"
 import { escalationIds } from "./escalate"
-import type { LineSignals, Preset } from "./types"
+import type { LineResult, LineSignals, Preset } from "./types"
 
-export interface LineResult {
-  id: string
-  words: string
-  mark: "clean" | "doubt" | "hard-call" | "mild"
-  reason?: string
-  glossary?: { source: string; pt: string }[]
-  hardIds?: string[]
-  frameIds?: string[]
-}
+export type { LineResult }
 
 export interface Completer {
   (request: {

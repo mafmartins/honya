@@ -383,10 +383,10 @@ function readLine(value: unknown): LineResult | undefined {
   if (!isRecord(value)) {
     return undefined
   }
-  const id = value.id
+  const id = readLineId(value.id)
   const words = value.words
   const mark = value.mark
-  if (typeof id !== "string" || typeof words !== "string" || !isMark(mark)) {
+  if (id === undefined || typeof words !== "string" || !isMark(mark)) {
     return undefined
   }
   const line: LineResult = { id, words, mark }
@@ -396,28 +396,38 @@ function readLine(value: unknown): LineResult | undefined {
   return line
 }
 
+function readLineId(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value)
+  }
+  return undefined
+}
+
 function copyOptional(line: LineResult, value: Record<string, unknown>): boolean {
-  if ("reason" in value && value.reason !== undefined) {
+  if ("reason" in value && value.reason !== undefined && value.reason !== null) {
     if (typeof value.reason !== "string") {
       return false
     }
     line.reason = value.reason
   }
-  if ("glossary" in value && value.glossary !== undefined) {
+  if ("glossary" in value && value.glossary !== undefined && value.glossary !== null) {
     const glossary = readGlossary(value.glossary)
     if (glossary === undefined) {
       return false
     }
     line.glossary = glossary
   }
-  if ("hardIds" in value && value.hardIds !== undefined) {
+  if ("hardIds" in value && value.hardIds !== undefined && value.hardIds !== null) {
     const hardIds = readStringList(value.hardIds)
     if (hardIds === undefined) {
       return false
     }
     line.hardIds = hardIds
   }
-  if ("frameIds" in value && value.frameIds !== undefined) {
+  if ("frameIds" in value && value.frameIds !== undefined && value.frameIds !== null) {
     const frameIds = readStringList(value.frameIds)
     if (frameIds === undefined) {
       return false

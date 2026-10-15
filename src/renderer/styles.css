@@ -1,0 +1,98 @@
+html,
+body {
+  background: #f3efe6;
+  color: #2a2420;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 32px 16px;
+  display: grid;
+  place-items: center;
+  font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.card {
+  width: min(880px, 100%);
+  box-sizing: border-box;
+  padding: 28px 32px 32px;
+  background: #faf7f2;
+  color: #2a2420;
+  border: 1.5px solid #2a2420;
+  box-shadow: 7px 7px 0 #2a2420;
+}
+
+.card-header p {
+  margin: 0;
+}
+
+.card-header p + p {
+  margin-top: 4px;
+}
+
+.review-body,
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-top: 20px;
+}
+
+.decision {
+  border-left: 1.5px dashed #2a2420;
+  padding-left: 28px;
+}
+
+.faded {
+  margin: 0 0 12px;
+  opacity: 0.4;
+}
+
+.current {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.note,
+.accept,
+.action {
+  color: #e36b1e;
+}
+
+.english,
+.rule {
+  margin: 0 0 20px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  color: #2a2420;
+  background: #faf7f2;
+  border: 1.5px solid #2a2420;
+  padding: 8px 10px;
+}
+
+button {
+  margin: 0 8px 8px 0;
+}
+
+ul {
+  margin: 0 0 16px;
+  padding-left: 18px;
+}
+
+p {
+  margin: 0 0 8px;
+}

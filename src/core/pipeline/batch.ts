@@ -1,0 +1,49 @@
+import type { Rule, StyleCard } from "../library/types"
+
+export interface Glossary {
+  entries: { source: string; pt: string }[]
+}
+
+export function emptyGlossary(): Glossary {
+  return { entries: [] }
+}
+
+export function addGlossary(
+  glossary: Glossary,
+  entries: { source: string; pt: string }[],
+): Glossary {
+  const existing = new Set(glossary.entries.map((e) => e.source))
+  const appended = entries.filter((e) => !existing.has(e.source))
+  return { entries: [...glossary.entries, ...appended] }
+}
+
+export function chunkDialogue<T>(lines: T[], size = 25): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < lines.length; i += size) {
+    chunks.push(lines.slice(i, i + size))
+  }
+  return chunks
+}
+
+function ruleLine(rule: Rule): string {
+  if (rule.kind === "prose") {
+    return rule.text
+  }
+  return `${rule.source} → ${rule.pt}`
+}
+
+export function withGlossary(
+  card: StyleCard,
+  brief: string,
+  glossary: Glossary,
+  lines: { id: string; words: string }[],
+): string {
+  const parts: string[] = [
+    card.voice,
+    ...card.rules.map(ruleLine),
+    brief,
+    ...glossary.entries.map((e) => `${e.source} → ${e.pt}`),
+    ...lines.map((line) => `${line.id}: ${line.words}`),
+  ]
+  return parts.join("\n")
+}

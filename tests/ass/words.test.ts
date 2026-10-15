@@ -15,4 +15,15 @@ describe("replaceWords", () => {
   it("refuses an unclosed override", () => {
     expect(replaceWords("{\\an8Hello", "Olá.").ok).toBe(false)
   })
+
+  it("places words on a tag-only line", () => {
+    expect(replaceWords("{\\an8}", "Olá.")).toEqual({
+      ok: true,
+      raw: "Olá.{\\an8}",
+    })
+  })
+
+  it("places words on an empty string", () => {
+    expect(replaceWords("", "Olá.")).toEqual({ ok: true, raw: "Olá." })
+  })
 })

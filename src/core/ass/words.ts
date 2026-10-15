@@ -12,12 +12,13 @@ export function replaceWords(
     throw new Error("line breaks changed")
   }
 
+  const target = textTarget(pieces)
   let placed = false
-  const next = pieces.map((piece) => {
+  const next = pieces.map((piece, index) => {
     if (isOverrideBlock(piece)) {
       return piece
     }
-    if (!placed && piece.length > 0) {
+    if (!placed && index === target) {
       placed = true
       return words
     }
@@ -25,6 +26,23 @@ export function replaceWords(
   })
 
   return { ok: true, raw: next.join("") }
+}
+
+function textTarget(pieces: readonly string[]): number | undefined {
+  let firstText: number | undefined
+  for (let index = 0; index < pieces.length; index += 1) {
+    const piece = pieces[index]
+    if (piece === undefined || isOverrideBlock(piece)) {
+      continue
+    }
+    if (piece.length > 0) {
+      return index
+    }
+    if (firstText === undefined) {
+      firstText = index
+    }
+  }
+  return firstText
 }
 
 function isOverrideBlock(piece: string): boolean {

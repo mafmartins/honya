@@ -25,6 +25,7 @@ export function applyTranslations(
     const translated = translations.get(cue.index)
     const outcome = replaceCueWords(cue.raw, translated ?? cue.raw)
     if (outcome.status === "line-breaks") {
+      report.push(`event ${String(cue.index)}: line breaks changed`)
       continue
     }
     if (outcome.status === "unsafe") {

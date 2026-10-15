@@ -20,4 +20,17 @@ describe("applyTranslations", () => {
     expect(text).toContain("ScriptType: v4.00+")
     expect(report).toEqual(["event 2: tags could not be split"])
   })
+
+  it("leaves a line untouched when translation changes line breaks", () => {
+    const fixture = `[Script Info]
+ScriptType: v4.00+
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello.\\NThere.
+`
+    const { text, report } = applyTranslations(fixture, new Set(["Default"]), new Map([[0, "Olá."]]))
+    expect(text).toContain("Hello.\\NThere.")
+    expect(report).toEqual(["event 0: line breaks changed"])
+  })
 })

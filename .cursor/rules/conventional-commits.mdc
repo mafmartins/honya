@@ -1,0 +1,30 @@
+---
+description: Conventional commits with a short subject and no co-author trailer
+alwaysApply: true
+---
+
+# Commits
+
+Use a single-line [Conventional Commit](https://www.conventionalcommits.org/). No body, no footers, no trailers.
+
+```
+type: subject
+```
+
+- `type` is `feat`, `fix`, `docs`, `test`, `refactor`, or `chore`
+- `subject` is lowercase imperative, with no trailing period
+- Do not add `Co-authored-by` or any other co-author mention
+
+Use:
+
+```
+docs: add mvp design spec
+```
+
+Do not use:
+
+```
+Add the Honya MVP design.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+```

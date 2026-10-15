@@ -12,8 +12,15 @@ export function addGlossary(
   glossary: Glossary,
   entries: { source: string; pt: string }[],
 ): Glossary {
-  const existing = new Set(glossary.entries.map((e) => e.source))
-  const appended = entries.filter((e) => !existing.has(e.source))
+  const seen = new Set(glossary.entries.map((e) => e.source))
+  const appended: { source: string; pt: string }[] = []
+  for (const entry of entries) {
+    if (seen.has(entry.source)) {
+      continue
+    }
+    seen.add(entry.source)
+    appended.push(entry)
+  }
   return { entries: [...glossary.entries, ...appended] }
 }
 

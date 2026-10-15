@@ -19,4 +19,12 @@ describe("batches", () => {
     expect(prompt).toContain("Himmel smiled.")
     expect(prompt).toContain("Olá.")
   })
+
+  it("keeps the first incoming row when the same source appears twice", () => {
+    const glossary = addGlossary(emptyGlossary(), [
+      { source: "Himmel", pt: "Himmel" },
+      { source: "Himmel", pt: "Céu" },
+    ])
+    expect(glossary.entries).toEqual([{ source: "Himmel", pt: "Himmel" }])
+  })
 })

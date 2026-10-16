@@ -2,14 +2,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { App } from "../../src/renderer/App"
-import type { SetupApi } from "../../src/shared/api"
+import type { HonyaApi } from "../../src/shared/api"
 import { fakeApi } from "./fakeApi"
 
 afterEach(() => {
   cleanup()
 })
 
-async function openProfiles(api: SetupApi): Promise<HTMLElement> {
+async function openProfiles(api: HonyaApi): Promise<HTMLElement> {
   render(<App api={api} />)
   fireEvent.click(await screen.findByRole("button", { name: "Profiles" }))
   return screen.findByRole("region", { name: "base profile" })
@@ -34,7 +34,7 @@ describe("profiles base side", () => {
 
   it("refuses an invalid characters-per-second limit and shows the stored value again", async () => {
     const api = fakeApi()
-    const saveBase = (next: Parameters<SetupApi["saveBase"]>[0]) => api.saveBase(next)
+    const saveBase = (next: Parameters<HonyaApi["saveBase"]>[0]) => api.saveBase(next)
     const base = await openProfiles({
       ...api,
       saveBase: (next) =>
@@ -66,7 +66,7 @@ describe("profiles base side", () => {
         }),
     })
     let chosen: string[] = []
-    const importExample: SetupApi["importExample"] = (...args) => api.importExample(...args)
+    const importExample: HonyaApi["importExample"] = (...args) => api.importExample(...args)
     const base = await openProfiles({
       ...api,
       importExample: (variant, name, text, styles) => {

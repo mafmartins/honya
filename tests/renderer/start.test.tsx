@@ -178,4 +178,118 @@ describe("start screen", () => {
     const select = screen.getByLabelText("series")
     expect(select instanceof HTMLSelectElement && select.value).toBe("")
   })
+
+  it("enables Translate only with a script, a series and a key, then opens the Translate screen", async () => {
+    const api = fakeApi({
+      pickScript: () => Promise.resolve({ path: "/s/ep01.ass", name: "ep01.ass", text: "x" }),
+      listSeries: () =>
+        Promise.resolve({ series: [{ id: "a", name: "Frieren", ruleCount: 0 }], problems: [] }),
+    })
+    render(<App api={api} />)
+    const button = screen.getByRole("button", { name: "Translate" })
+    expect(button instanceof HTMLButtonElement && button.disabled).toBe(true)
+    fireEvent.click(screen.getByRole("button", { name: "Choose script…" }))
+    await screen.findByText("ep01.ass")
+    fireEvent.change(await screen.findByLabelText("series"), { target: { value: "a" } })
+    expect(button instanceof HTMLButtonElement && button.disabled).toBe(true)
+    fireEvent.change(await screen.findByLabelText("claude key"), { target: { value: "sk-test" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save key" }))
+    await waitFor(() => {
+      expect(button instanceof HTMLButtonElement && button.disabled).toBe(false)
+    })
+    fireEvent.click(button)
+    expect(await screen.findByRole("heading", { name: "Translate" })).toBeTruthy()
+  })
+
+  it("shows the unfinished translation and resumes it", async () => {
+    const api = fakeApi({
+      latestUnfinished: () =>
+        Promise.resolve({
+          id: "s1",
+          scriptName: "ep01.ass",
+          seriesName: "Frieren",
+          phase: "stopped",
+          completedBatches: 2,
+          totalBatches: 5,
+          openFlags: 0,
+        }),
+    })
+    render(<App api={api} />)
+    expect(await screen.findByText("Unfinished: ep01.ass · Frieren · batch 2 of 5")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }))
+    expect(await screen.findByRole("heading", { name: "Translate" })).toBeTruthy()
+  })
+
+  it("describes a session in review by its open flags", async () => {
+    const api = fakeApi({
+      latestUnfinished: () =>
+        Promise.resolve({
+          id: "s1",
+          scriptName: "ep01.ass",
+          seriesName: "Frieren",
+          phase: "review",
+          completedBatches: 5,
+          totalBatches: 5,
+          openFlags: 3,
+        }),
+    })
+    render(<App api={api} />)
+    expect(
+      await screen.findByText("Unfinished: ep01.ass · Frieren · in review, 3 flags left"),
+    ).toBeTruthy()
+  })
+
+  it("discards the unfinished translation after confirming", async () => {
+    const discard = vi.fn(() => Promise.resolve())
+    const api = fakeApi({
+      latestUnfinished: () =>
+        Promise.resolve({
+          id: "s1",
+          scriptName: "ep01.ass",
+          seriesName: "Frieren",
+          phase: "failed",
+          completedBatches: 1,
+          totalBatches: 4,
+          openFlags: 0,
+        }),
+      discardTranslation: discard,
+    })
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true)
+    render(<App api={api} />)
+    fireEvent.click(await screen.findByRole("button", { name: "Discard" }))
+    expect(confirm).toHaveBeenCalledWith("Discard this translation? Finished batches will be lost.")
+    await waitFor(() => {
+      expect(screen.queryByText(/^Unfinished:/)).toBeNull()
+    })
+    expect(discard).toHaveBeenCalledWith("s1")
+  })
+
+  it("keeps the card when the discard is not confirmed", async () => {
+    const discard = vi.fn(() => Promise.resolve())
+    const api = fakeApi({
+      latestUnfinished: () =>
+        Promise.resolve({
+          id: "s1",
+          scriptName: "ep01.ass",
+          seriesName: "Frieren",
+          phase: "failed",
+          completedBatches: 1,
+          totalBatches: 4,
+          openFlags: 0,
+        }),
+      discardTranslation: discard,
+    })
+    vi.spyOn(window, "confirm").mockReturnValue(false)
+    render(<App api={api} />)
+    fireEvent.click(await screen.findByRole("button", { name: "Discard" }))
+    expect(discard).not.toHaveBeenCalled()
+    expect(screen.getByText(/^Unfinished:/)).toBeTruthy()
+  })
+
+  it("shows no card when nothing is unfinished", async () => {
+    render(<App api={fakeApi()} />)
+    await screen.findByLabelText("series")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(screen.queryByText(/^Unfinished:/)).toBeNull()
+  })
 })

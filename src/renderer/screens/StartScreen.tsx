@@ -5,24 +5,48 @@ import {
   VARIANTS,
   type Preset,
   type ProviderId,
+  type UnfinishedSession,
   type Variant,
 } from "../../shared/api"
-import type { FrameSetting, Session } from "../App"
+import type { FrameSetting, Session, TranslateTarget } from "../App"
 import { useAction, useReport } from "../action"
 import { errorMessage, useApi } from "../api"
 import { KeyField } from "../components/KeyField"
 import { SeriesPicker } from "../components/SeriesPicker"
+import { ResumeCard } from "../translate/ResumeCard"
 
 export function StartScreen(props: {
   session: Session
   onChange: (patch: Partial<Session>) => void
   onOpenProfiles: () => void
+  onTranslate: (target: TranslateTarget) => void
 }): React.JSX.Element {
   const { session, onChange } = props
   const api = useApi()
   const act = useAction()
   const report = useReport()
   const [hasKey, setHasKey] = useState<{ provider: ProviderId; present: boolean } | null>(null)
+
+  const [unfinished, setUnfinished] = useState<UnfinishedSession | null>(null)
+
+  useEffect(() => {
+    let current = true
+    api.latestUnfinished().then(
+      (found) => {
+        if (current) {
+          setUnfinished(found)
+        }
+      },
+      (error: unknown) => {
+        if (current) {
+          report(errorMessage(error))
+        }
+      },
+    )
+    return () => {
+      current = false
+    }
+  }, [api, report])
 
   useEffect(() => {
     let current = true
@@ -43,6 +67,12 @@ export function StartScreen(props: {
     }
   }, [api, session.provider, report])
 
+  const canTranslate =
+    session.script !== null &&
+    session.seriesId !== null &&
+    hasKey?.provider === session.provider &&
+    hasKey.present
+
   return (
     <>
       <header className="card-header">
@@ -51,6 +81,23 @@ export function StartScreen(props: {
           Profiles
         </button>
       </header>
+      {unfinished === null ? null : (
+        <ResumeCard
+          session={unfinished}
+          onResume={() => {
+            props.onTranslate({ kind: "resume", id: unfinished.id })
+          }}
+          onDiscard={() => {
+            if (!window.confirm("Discard this translation? Finished batches will be lost.")) {
+              return
+            }
+            act(async () => {
+              await api.discardTranslation(unfinished.id)
+              setUnfinished(null)
+            })
+          }}
+        />
+      )}
       <div className="split">
         <div>
           <div className="field">
@@ -207,6 +254,40 @@ export function StartScreen(props: {
           </label>
         </div>
       </div>
+      <button
+        type="button"
+        className="action"
+        disabled={!canTranslate}
+        onClick={() => {
+          const { script, seriesId } = session
+          if (script === null || seriesId === null) {
+            return
+          }
+          act(async () => {
+            const list = await api.listSeries(session.variant)
+            const found = list.series.find((item) => item.id === seriesId)
+            if (found === undefined) {
+              throw new Error("That series no longer exists.")
+            }
+            props.onTranslate({
+              kind: "new",
+              request: {
+                scriptPath: script.path,
+                variant: session.variant,
+                seriesId,
+                provider: session.provider,
+                preset: session.preset,
+                frameSetting: session.frameSetting,
+                videoPath: session.video?.path ?? null,
+              },
+              scriptName: script.name,
+              seriesName: found.name,
+            })
+          })
+        }}
+      >
+        Translate
+      </button>
     </>
   )
 }

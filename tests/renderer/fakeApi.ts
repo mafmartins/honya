@@ -2,14 +2,30 @@ import { emptyBase } from "../../src/core/library/card"
 import type {
   BaseProfile,
   ModelPair,
+  HonyaApi,
   ProviderId,
+  ReviewView,
   Rule,
   SeriesSummary,
-  SetupApi,
+  TranslateEvent,
   Variant,
 } from "../../src/shared/api"
 
-export function fakeApi(overrides: Partial<SetupApi> = {}): SetupApi {
+const EMPTY_REVIEW: ReviewView = {
+  sessionId: "session-1",
+  scriptName: "subs.ass",
+  seriesName: "Series",
+  variant: "pt-pt",
+  preset: "save",
+  outputPath: "/s/subs.pt-pt.ass",
+  lines: [],
+  openFlags: 0,
+}
+
+export function fakeApi(
+  overrides: Partial<HonyaApi> = {},
+): HonyaApi & { emitTranslate(event: TranslateEvent): void } {
+  const listeners = new Set<(event: TranslateEvent) => void>()
   const keys = new Set<ProviderId>()
   const models = new Map<ProviderId, ModelPair>()
   const series = new Map<Variant, (SeriesSummary & { rules: Rule[] })[]>([
@@ -35,7 +51,7 @@ export function fakeApi(overrides: Partial<SetupApi> = {}): SetupApi {
     }
     return item
   }
-  const api: SetupApi = {
+  const api: HonyaApi = {
     pickScript: () => Promise.resolve(null),
     pickVideo: () => Promise.resolve(null),
     pickExample: () => Promise.resolve(null),
@@ -97,6 +113,53 @@ export function fakeApi(overrides: Partial<SetupApi> = {}): SetupApi {
       bases.set(variant, saved)
       return Promise.resolve(saved)
     },
+    prepareTranslation: () =>
+      Promise.resolve({
+        styles: [{ name: "Default", guess: "dialogue" }],
+        outputPath: "/s/subs.pt-pt.ass",
+        scriptName: "subs.ass",
+      }),
+    startTranslation: () => Promise.resolve("session-1"),
+    resumeTranslation: (id) => Promise.resolve(id),
+    stopTranslation: () => Promise.resolve(),
+    latestUnfinished: () => Promise.resolve(null),
+    discardTranslation: () => Promise.resolve(),
+    loadReview: () => Promise.resolve(EMPTY_REVIEW),
+    acceptLine: () => Promise.resolve(EMPTY_REVIEW),
+    checkEdit: () => Promise.resolve({ status: "none" }),
+    confirmEdit: () => Promise.resolve(EMPTY_REVIEW),
+    finishTranslation: () =>
+      Promise.resolve({
+        outputPath: "/s/subs.pt-pt.ass",
+        report: {
+          dialogueLines: 0,
+          translated: 0,
+          strongModel: 0,
+          leftInEnglish: 0,
+          overLimit: 0,
+          flags: 0,
+          editedFlags: 0,
+          acceptedAsIs: 0,
+          rulesSaved: { series: 0, base: 0 },
+          framesUsed: 0,
+          frameFailures: 0,
+          unchanged: 0,
+          elapsedMs: 0,
+          outputPath: "/s/subs.pt-pt.ass",
+        },
+      }),
+    revealOutput: () => Promise.resolve(),
+    onTranslateEvent: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
   }
-  return { ...api, ...overrides }
+  const emitTranslate = (event: TranslateEvent): void => {
+    for (const listener of [...listeners]) {
+      listener(event)
+    }
+  }
+  return { ...api, ...overrides, emitTranslate }
 }

@@ -3,8 +3,9 @@ import type {
   PickedScript,
   PickedVideo,
   Preset,
+  HonyaApi,
   ProviderId,
-  SetupApi,
+  TranslateRequest,
   Variant,
 } from "../shared/api"
 import { ErrorContext } from "./action"
@@ -12,8 +13,18 @@ import { ApiContext } from "./api"
 import { ErrorLine } from "./ErrorLine"
 import { ProfilesScreen } from "./screens/ProfilesScreen"
 import { StartScreen } from "./screens/StartScreen"
+import { TranslateScreen } from "./screens/TranslateScreen"
 
 export type FrameSetting = "none" | "marked" | "every"
+
+export type TranslateTarget =
+  | {
+      kind: "new"
+      request: Omit<TranslateRequest, "dialogueStyles">
+      scriptName: string
+      seriesName: string
+    }
+  | { kind: "resume"; id: string }
 
 export interface Session {
   script: PickedScript | null
@@ -35,8 +46,10 @@ const FIRST_SESSION: Session = {
   frameSetting: "none",
 }
 
-export function App({ api }: { api: SetupApi }): React.JSX.Element {
-  const [screen, setScreen] = useState<"start" | "profiles">("start")
+export function App({ api }: { api: HonyaApi }): React.JSX.Element {
+  const [screen, setScreen] = useState<
+    { name: "start" } | { name: "profiles" } | { name: "translate"; target: TranslateTarget }
+  >({ name: "start" })
   const [session, setSession] = useState<Session>(FIRST_SESSION)
   const [error, setError] = useState<string | null>(null)
   const change = (patch: Partial<Session>): void => {
@@ -47,12 +60,31 @@ export function App({ api }: { api: SetupApi }): React.JSX.Element {
       <ErrorContext.Provider value={setError}>
         <article className="card">
           <ErrorLine message={error} />
-          {screen === "start" ? (
+          {screen.name === "start" ? (
             <StartScreen
               session={session}
               onChange={change}
               onOpenProfiles={() => {
-                setScreen("profiles")
+                setScreen({ name: "profiles" })
+              }}
+              onTranslate={(target) => {
+                setScreen({ name: "translate", target })
+              }}
+            />
+          ) : screen.name === "translate" ? (
+            <TranslateScreen
+              target={screen.target}
+              onBack={() => {
+                setScreen({ name: "start" })
+              }}
+              onAnother={() => {
+                setSession((current) => ({
+                  ...current,
+                  script: null,
+                  video: null,
+                  frameSetting: "none",
+                }))
+                setScreen({ name: "start" })
               }}
             />
           ) : (
@@ -62,7 +94,7 @@ export function App({ api }: { api: SetupApi }): React.JSX.Element {
                 change({ variant, seriesId: null })
               }}
               onBack={() => {
-                setScreen("start")
+                setScreen({ name: "start" })
               }}
             />
           )}

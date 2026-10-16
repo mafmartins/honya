@@ -1,9 +1,9 @@
 import { createContext, useContext } from "react"
-import type { SetupApi } from "../shared/api"
+import type { HonyaApi } from "../shared/api"
 
-export const ApiContext = createContext<SetupApi | null>(null)
+export const ApiContext = createContext<HonyaApi | null>(null)
 
-export function useApi(): SetupApi {
+export function useApi(): HonyaApi {
   const api = useContext(ApiContext)
   if (api === null) {
     throw new Error("ApiContext is missing.")

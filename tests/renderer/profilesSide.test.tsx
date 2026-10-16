@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { App } from "../../src/renderer/App"
-import type { SetupApi } from "../../src/shared/api"
+import type { HonyaApi } from "../../src/shared/api"
 import { fakeApi } from "./fakeApi"
 
 afterEach(() => {
@@ -10,7 +10,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function openProfiles(api: SetupApi): Promise<void> {
+async function openProfiles(api: HonyaApi): Promise<void> {
   render(<App api={api} />)
   fireEvent.click(await screen.findByRole("button", { name: "Profiles" }))
 }

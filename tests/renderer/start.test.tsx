@@ -85,6 +85,24 @@ describe("start screen", () => {
     expect(screen.queryByRole("option", { name: "Frieren" })).toBeNull()
   })
 
+  it("drops the old variant's series as soon as the variant changes", async () => {
+    let releaseBr: (list: SeriesList) => void = () => undefined
+    const api = fakeApi({
+      listSeries: (variant: Variant) =>
+        variant === "pt-pt"
+          ? Promise.resolve({ series: [{ id: "a", name: "Frieren", ruleCount: 0 }], problems: [] })
+          : new Promise<SeriesList>((resolve) => {
+              releaseBr = resolve
+            }),
+    })
+    render(<App api={api} />)
+    expect(await screen.findByRole("option", { name: "Frieren" })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText("variant"), { target: { value: "pt-br" } })
+    expect(screen.queryByRole("option", { name: "Frieren" })).toBeNull()
+    releaseBr({ series: [{ id: "b", name: "Mushishi", ruleCount: 0 }], problems: [] })
+    expect(await screen.findByRole("option", { name: "Mushishi" })).toBeTruthy()
+  })
+
   it("asks for a key only when the provider has none, and hides it after saving", async () => {
     render(<App api={fakeApi()} />)
     const field = await screen.findByLabelText("claude key")

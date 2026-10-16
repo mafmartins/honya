@@ -94,6 +94,7 @@ export function StartScreen(props: {
           <div className="field">
             <span>series</span>
             <SeriesPicker
+              key={session.variant}
               variant={session.variant}
               seriesId={session.seriesId}
               onSelect={(seriesId) => {

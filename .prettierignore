@@ -1,0 +1,5 @@
+dist/
+release/
+graphify-out/
+docs/
+package-lock.json

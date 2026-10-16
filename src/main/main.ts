@@ -158,7 +158,7 @@ function openWindow(): void {
     height: 760,
     title: "Honya",
     webPreferences: {
-      preload: join(app.getAppPath(), "src", "preload", "preload.ts"),
+      preload: join(app.getAppPath(), "dist", "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

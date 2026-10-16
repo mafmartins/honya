@@ -3,24 +3,33 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "src/main/main.ts",
+  "engines": {
+    "node": ">=24.21.0"
+  },
+  "main": "dist/main.js",
   "scripts": {
+    "build": "node scripts/build.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
-    "start": "electron .",
-    "pack": "electron-builder"
+    "start": "node scripts/build.mjs && electron .",
+    "pack": "node scripts/build.mjs && electron-builder"
   },
   "dependencies": {
-    "ass-compiler": "^0.1.16"
+    "ass-compiler": "0.1.16"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
-    "electron": "^44.7.2",
-    "electron-builder": "^26.15.3",
-    "eslint": "^9.39.5",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.2",
-    "vitest": "^5.0.4"
+    "@types/node": "26.6.4",
+    "electron": "44.7.0",
+    "electron-builder": "27.0.0-alpha.10",
+    "esbuild": "0.28.2",
+    "eslint": "9.39.5",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true
   }
 }

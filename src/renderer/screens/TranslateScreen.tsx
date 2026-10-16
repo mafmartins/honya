@@ -191,10 +191,12 @@ export function TranslateScreen(props: {
           </button>
         )}
       </header>
-      {showJob && target.kind === "new" ? (
+      {showJob ? (
         <div className="job">
           <p>
-            {`${target.scriptName} · ${target.seriesName} · ${target.request.variant} · ${target.request.provider} · ${target.request.preset}`}
+            {target.kind === "new"
+              ? `${target.scriptName} · ${target.seriesName} · ${target.request.variant} · ${target.request.provider} · ${target.request.preset}`
+              : `${target.scriptName} · ${target.seriesName}`}
           </p>
           {prepared === null ? null : <p>{`Output: ${prepared.outputPath}`}</p>}
         </div>
@@ -212,6 +214,11 @@ export function TranslateScreen(props: {
       {phase === "running" ? (
         <LivePanel
           progress={progress}
+          waiting={
+            target.kind === "resume"
+              ? `Resuming at batch ${String(target.completedBatches + 1)} of ${String(target.totalBatches)}`
+              : "Starting…"
+          }
           activity={activity}
           lines={lines}
           stopping={stopping}

@@ -85,7 +85,14 @@ export function StartScreen(props: {
         <ResumeCard
           session={unfinished}
           onResume={() => {
-            props.onTranslate({ kind: "resume", id: unfinished.id })
+            props.onTranslate({
+              kind: "resume",
+              id: unfinished.id,
+              scriptName: unfinished.scriptName,
+              seriesName: unfinished.seriesName,
+              completedBatches: unfinished.completedBatches,
+              totalBatches: unfinished.totalBatches,
+            })
           }}
           onDiscard={() => {
             if (!window.confirm("Discard this translation? Finished batches will be lost.")) {

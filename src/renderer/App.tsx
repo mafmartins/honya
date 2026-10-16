@@ -24,7 +24,14 @@ export type TranslateTarget =
       scriptName: string
       seriesName: string
     }
-  | { kind: "resume"; id: string }
+  | {
+      kind: "resume"
+      id: string
+      scriptName: string
+      seriesName: string
+      completedBatches: number
+      totalBatches: number
+    }
 
 export interface Session {
   script: PickedScript | null

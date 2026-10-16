@@ -14,7 +14,14 @@ afterEach(() => {
   cleanup()
 })
 
-const TARGET: TranslateTarget = { kind: "resume", id: "session-1" }
+const TARGET: TranslateTarget = {
+  kind: "resume",
+  id: "session-1",
+  scriptName: "ep01.ass",
+  seriesName: "Frieren",
+  completedBatches: 1,
+  totalBatches: 5,
+}
 
 function Harness(props: { api: HonyaApi; onAnother?: () => void }): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)

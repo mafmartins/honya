@@ -31,6 +31,15 @@ const NEW_TARGET: TranslateTarget = {
   seriesName: "Frieren",
 }
 
+const RESUME_TARGET: TranslateTarget = {
+  kind: "resume",
+  id: "s9",
+  scriptName: "ep01.ass",
+  seriesName: "Frieren",
+  completedBatches: 1,
+  totalBatches: 5,
+}
+
 function Harness(props: { api: HonyaApi; target: TranslateTarget }): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   return (
@@ -178,6 +187,26 @@ describe("translate screen", () => {
     expect(screen.queryByText(/^Output:/)).toBeNull()
   })
 
+  it("names what a resume target continues and replaces it with the batch text", async () => {
+    const api = fakeApi()
+    const target: TranslateTarget = {
+      kind: "resume",
+      id: "s9",
+      scriptName: "ep01.ass",
+      seriesName: "Frieren",
+      completedBatches: 5,
+      totalBatches: 12,
+    }
+    render(<Harness api={api} target={target} />)
+    expect(await screen.findByText("ep01.ass · Frieren")).toBeTruthy()
+    expect(screen.getByText("Resuming at batch 6 of 12")).toBeTruthy()
+    act(() => {
+      api.emitTranslate(batch("s9", 6))
+    })
+    expect(screen.getByText("Batch 6 of 12")).toBeTruthy()
+    expect(screen.queryByText("Resuming at batch 6 of 12")).toBeNull()
+  })
+
   it("shows an event emitted before startTranslation resolves", async () => {
     const holder: { api: ReturnType<typeof fakeApi> | null } = { api: null }
     const api = fakeApi({
@@ -258,7 +287,7 @@ describe("translate screen", () => {
     })
     const api = fakeApi({ resumeTranslation })
     holder.api = api
-    render(<Harness api={api} target={{ kind: "resume", id: "s9" }} />)
+    render(<Harness api={api} target={RESUME_TARGET} />)
     expect(resumeTranslation).toHaveBeenCalledWith("s9")
     expect(await screen.findByText("Done")).toBeTruthy()
   })
@@ -274,7 +303,7 @@ describe("translate screen", () => {
     const api = fakeApi({
       resumeTranslation: () => Promise.reject(new Error("That translation no longer exists.")),
     })
-    render(<Harness api={api} target={{ kind: "resume", id: "s9" }} />)
+    render(<Harness api={api} target={RESUME_TARGET} />)
     expect((await screen.findByRole("alert")).textContent).toBe(
       "That translation no longer exists.",
     )
@@ -295,7 +324,7 @@ describe("translate screen", () => {
     cleanup()
     render(
       <StrictMode>
-        <Harness api={api} target={{ kind: "resume", id: "s9" }} />
+        <Harness api={api} target={RESUME_TARGET} />
       </StrictMode>,
     )
     await screen.findByRole("button", { name: "Stop" })
@@ -314,7 +343,7 @@ describe("translate screen", () => {
   it("unsubscribes on unmount", () => {
     const off = vi.fn()
     const api = fakeApi({ onTranslateEvent: () => off })
-    const view = render(<Harness api={api} target={{ kind: "resume", id: "s9" }} />)
+    const view = render(<Harness api={api} target={RESUME_TARGET} />)
     view.unmount()
     expect(off).toHaveBeenCalledOnce()
   })

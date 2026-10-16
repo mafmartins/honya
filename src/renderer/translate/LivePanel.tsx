@@ -10,6 +10,7 @@ export interface Progress {
 
 export function LivePanel(props: {
   progress: Progress | null
+  waiting: string
   activity: string | null
   lines: LiveLine[]
   stopping: boolean
@@ -29,7 +30,7 @@ export function LivePanel(props: {
     <section>
       <p>
         {progress === null
-          ? "Starting…"
+          ? props.waiting
           : `Batch ${String(progress.index)} of ${String(progress.total)}`}
       </p>
       <progress value={progress?.linesDone ?? 0} max={progress?.lineTotal ?? 1} />

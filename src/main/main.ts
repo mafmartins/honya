@@ -12,7 +12,7 @@ import { createFileStore } from "../core/library/fileStore"
 import type { StyleCard } from "../core/library/types"
 import type { Completer } from "../core/pipeline/run"
 import type { ProviderId, Variant } from "../core/pipeline/types"
-import { completeChat, completeText, type ChatInput } from "../core/providers/complete"
+import { completeJson, completeText, type ChatInput } from "../core/providers/complete"
 import { providerError } from "../core/providers/errors"
 import { withRetry } from "../core/providers/retry"
 import { createProfileHandlers, type ProfileHandlers } from "./ipc/profiles"
@@ -23,7 +23,7 @@ import { createSecretStore, type SecretStore } from "./secrets"
 import { createReviewHandlers } from "./translate/review"
 import { createRunner, type TranslateEvent } from "./translate/runner"
 import { createSessionStore } from "./translate/session"
-import { logEntry } from "./providerLog"
+import { callEntry, problemEntry } from "./providerLog"
 
 function boot(): void {
   const secrets = createSecretStore(safeStorage, { read: readKeyFile, write: writeKeyFile })
@@ -36,6 +36,9 @@ function boot(): void {
     sessions,
     loadCard: (variant, seriesId) => loadCard(profiles, variant, seriesId),
     hasKey: (provider) => secrets.hasKey(provider),
+    logProblem: (provider, problem) => {
+      logLine(problemEntry({ time: new Date().toISOString(), provider, ...problem }))
+    },
     completerFor: (provider, onRetry) =>
       withRetry(
         (request) => completeWithProvider(secrets, models, provider, request),
@@ -185,39 +188,43 @@ async function completeWithProvider(
     throw providerError(provider, 401, null)
   }
   const pair = models.get(provider)
+  // The cheap model answers most lines, so it thinks little; the strong model only
+  // sees the few flagged lines and gets a moderate amount.
   const chat: ChatInput = {
     provider,
     model: request.tier === "cheap" ? pair.cheap : pair.strong,
     apiKey,
+    system: request.system,
     prompt: request.prompt,
+    schema: request.schema,
+    effort: request.tier === "cheap" ? "low" : "medium",
     fetch,
-  }
-  if (request.tier === "cheap") {
-    chat.effort = "low"
   }
   if (request.images !== undefined) {
     chat.images = request.images.map((image) => ({ id: image.id, png: image.bytes }))
   }
-  const reply = await completeChat(chat)
-  logReply(
-    logEntry({
-      time: new Date().toISOString(),
-      provider,
-      model: chat.model,
-      tier: request.tier,
-      prompt: request.prompt,
-      reply,
-    }),
-  )
-  return reply
+  const reply = await completeJson(chat)
+  const call = {
+    time: new Date().toISOString(),
+    provider,
+    model: chat.model,
+    tier: request.tier,
+    usage: reply.usage,
+  }
+  if ("refused" in reply) {
+    logLine(callEntry({ ...call, problem: reply.reason, excerpt: reply.excerpt ?? "" }))
+    return reply.excerpt === undefined
+      ? { refused: true, reason: reply.reason }
+      : { refused: true, reason: reply.reason, excerpt: reply.excerpt }
+  }
+  logLine(callEntry(call))
+  return { value: reply.value }
 }
 
-// Unusable or mismatched provider replies go to <userData>/logs/providers.log so a run
-// that falls back to English can be explained. Logging never breaks a translation.
-function logReply(entry: string | null): void {
-  if (entry === null) {
-    return
-  }
+// Every provider request (with its token counts) and every unusable reply goes to
+// <userData>/logs/providers.log, so a run's cost and any English fallback can be
+// explained. Logging never breaks a translation.
+function logLine(entry: string): void {
   try {
     const folder = join(app.getPath("userData"), "logs")
     mkdirSync(folder, { recursive: true })

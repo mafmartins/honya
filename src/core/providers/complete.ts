@@ -1,30 +1,52 @@
-import type { LineResult, ProviderId } from "../pipeline/types"
+import type { ProviderId } from "../pipeline/types"
+import type { ReplySchema } from "../pipeline/schemas"
 import { ProviderError, providerError, providerName } from "./errors"
+
+export type Effort = "low" | "medium"
 
 export interface ChatInput {
   provider: ProviderId
   model: string
   apiKey: string
+  // Instructions that stay the same across a run's requests, sent as the system prompt
+  // so providers that cache prompt prefixes can reuse it.
+  system?: string
   prompt: string
   images?: { id: string; png: Uint8Array }[]
+  // Constrains the reply to this JSON schema (each provider's structured output mode).
+  schema?: ReplySchema
   fetch: typeof fetch
-  effort?: "low"
+  // How much the model may think before answering; the provider default when absent.
+  effort?: Effort
   // How long to wait for a reply before giving up; 3 minutes unless a test shortens it.
   timeoutMs?: number
+}
+
+// Tokens one request used. `output` includes thinking; `cached` is the part of `input`
+// read from the provider's prompt cache.
+export interface Usage {
+  input: number
+  output: number
+  cached: number
 }
 
 const REQUEST_TIMEOUT_MS = 3 * 60 * 1000
 
 // An unusable reply says why, so the cause can be logged; `excerpt` is the start of
 // the reply text when there was some.
-export type Unusable = { refused: true; reason: string; excerpt?: string }
-type ChatReply = { lines: LineResult[] } | Unusable
+export type Unusable = { refused: true; reason: string; excerpt?: string; usage: Usage | null }
+export type JsonReply = { value: unknown; usage: Usage | null } | Unusable
+
 type ChatImage = { id: string; png: Uint8Array }
 type HeaderMap = Record<string, string>
 
 interface TextPart {
   type: "text"
   text: string
+}
+
+interface ClaudeSystemPart extends TextPart {
+  cache_control: { type: "ephemeral" }
 }
 
 interface ClaudeImagePart {
@@ -57,27 +79,46 @@ interface GeminiImagePart {
   }
 }
 
+interface JsonSchemaFormat {
+  type: "json_schema"
+  json_schema: { name: string; strict: true; schema: Readonly<Record<string, unknown>> }
+}
+
 interface ClaudeBody {
   model: string
   max_tokens: number
-  output_config?: { effort: "low" }
+  system?: ClaudeSystemPart[]
+  output_config?: {
+    effort?: Effort
+    format?: { type: "json_schema"; schema: Readonly<Record<string, unknown>> }
+  }
   messages: { role: "user"; content: string | (TextPart | ClaudeImagePart)[] }[]
 }
 
+type ChatMessage<Image> =
+  { role: "system"; content: string } | { role: "user"; content: string | (TextPart | Image)[] }
+
 interface OpenAiBody {
   model: string
-  reasoning_effort?: "low"
-  messages: { role: "user"; content: string | (TextPart | OpenAiImagePart)[] }[]
+  reasoning_effort?: Effort
+  response_format?: JsonSchemaFormat
+  messages: ChatMessage<OpenAiImagePart>[]
 }
 
 interface MistralBody {
   model: string
   reasoning_effort?: "none"
-  messages: { role: "user"; content: string | (TextPart | MistralImagePart)[] }[]
+  response_format?: JsonSchemaFormat
+  messages: ChatMessage<MistralImagePart>[]
 }
 
 interface GeminiBody {
-  generationConfig?: { thinkingConfig: { thinkingLevel: "low" } }
+  systemInstruction?: { parts: GeminiTextPart[] }
+  generationConfig?: {
+    thinkingConfig?: { thinkingLevel: Effort }
+    responseMimeType?: "application/json"
+    responseJsonSchema?: Readonly<Record<string, unknown>>
+  }
   contents: { role: "user"; parts: (GeminiTextPart | GeminiImagePart)[] }[]
 }
 
@@ -89,20 +130,17 @@ interface ProviderRequest {
   body: ProviderBody
 }
 
-const JSON_INSTRUCTION =
-  'Return JSON { "lines": [{ "id", "words", "mark", "reason", "glossary" }] } and keep every \\N.'
-
 const CLAUDE_MAX_TOKENS = 16000
 
-export async function completeChat(input: ChatInput): Promise<ChatReply> {
-  const body = await send(input, buildRequest(input, true))
-  return readChatBody(body)
+export async function completeJson(input: ChatInput): Promise<JsonReply> {
+  const body = await send(input, buildRequest(input))
+  return readJsonBody(body)
 }
 
 export async function completeText(
   input: ChatInput,
 ): Promise<{ text: string } | { refused: true }> {
-  const body = await send(input, buildRequest(input, false))
+  const body = await send(input, buildRequest(input))
   const parsed = parseJson(body)
   if (!isRecord(parsed)) {
     return { refused: true }
@@ -143,39 +181,33 @@ async function send(input: ChatInput, request: ProviderRequest): Promise<string>
   return text
 }
 
-function buildRequest(input: ChatInput, lines: boolean): ProviderRequest {
-  const images = input.images ?? []
-  const text = lines ? instructed(input.prompt) : input.prompt
+function buildRequest(input: ChatInput): ProviderRequest {
   switch (input.provider) {
     case "claude":
       return {
         url: "https://api.anthropic.com/v1/messages",
         headers: claudeHeaders(input.apiKey),
-        body: claudeBody(input.model, text, images, input.effort),
+        body: claudeBody(input),
       }
     case "gpt":
       return {
         url: "https://api.openai.com/v1/chat/completions",
         headers: bearerHeaders(input.apiKey),
-        body: openAiBody(input.model, text, images, input.effort),
+        body: openAiBody(input),
       }
     case "gemini":
       return {
         url: geminiUrl(input.model, input.apiKey),
         headers: { "Content-Type": "application/json" },
-        body: geminiBody(text, images, input.effort),
+        body: geminiBody(input),
       }
     case "mistral":
       return {
         url: "https://api.mistral.ai/v1/chat/completions",
         headers: bearerHeaders(input.apiKey),
-        body: mistralBody(input.model, text, images, input.effort),
+        body: mistralBody(input),
       }
   }
-}
-
-function instructed(prompt: string): string {
-  return `${JSON_INSTRUCTION}\n${prompt}`
 }
 
 function claudeHeaders(apiKey: string): HeaderMap {
@@ -197,67 +229,86 @@ function geminiUrl(model: string, apiKey: string): string {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
 }
 
-function claudeBody(
-  model: string,
-  text: string,
-  images: readonly ChatImage[],
-  effort: ChatInput["effort"],
-): ClaudeBody {
+function claudeBody(input: ChatInput): ClaudeBody {
   const body: ClaudeBody = {
-    model,
+    model: input.model,
     max_tokens: CLAUDE_MAX_TOKENS,
-    messages: [{ role: "user", content: claudeContent(text, images) }],
+    messages: [{ role: "user", content: claudeContent(input.prompt, input.images ?? []) }],
   }
-  if (effort === "low") {
-    body.output_config = { effort: "low" }
+  if (input.system !== undefined) {
+    body.system = [{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }]
   }
-  return body
-}
-
-function openAiBody(
-  model: string,
-  text: string,
-  images: readonly ChatImage[],
-  effort: ChatInput["effort"],
-): OpenAiBody {
-  const body: OpenAiBody = {
-    model,
-    messages: [{ role: "user", content: openAiContent(text, images) }],
-  }
-  if (effort === "low") {
-    body.reasoning_effort = "low"
+  if (input.effort !== undefined || input.schema !== undefined) {
+    body.output_config = {}
+    if (input.effort !== undefined) {
+      body.output_config.effort = input.effort
+    }
+    if (input.schema !== undefined) {
+      body.output_config.format = { type: "json_schema", schema: input.schema.schema }
+    }
   }
   return body
 }
 
-function mistralBody(
-  model: string,
-  text: string,
-  images: readonly ChatImage[],
-  effort: ChatInput["effort"],
-): MistralBody {
-  const body: MistralBody = {
-    model,
-    messages: [{ role: "user", content: mistralContent(text, images) }],
+function openAiBody(input: ChatInput): OpenAiBody {
+  const messages: ChatMessage<OpenAiImagePart>[] = []
+  if (input.system !== undefined) {
+    messages.push({ role: "system", content: input.system })
   }
-  if (effort === "low") {
+  messages.push({ role: "user", content: openAiContent(input.prompt, input.images ?? []) })
+  const body: OpenAiBody = { model: input.model, messages }
+  if (input.effort !== undefined) {
+    body.reasoning_effort = input.effort
+  }
+  if (input.schema !== undefined) {
+    body.response_format = jsonSchemaFormat(input.schema)
+  }
+  return body
+}
+
+function mistralBody(input: ChatInput): MistralBody {
+  const messages: ChatMessage<MistralImagePart>[] = []
+  if (input.system !== undefined) {
+    messages.push({ role: "system", content: input.system })
+  }
+  messages.push({ role: "user", content: mistralContent(input.prompt, input.images ?? []) })
+  const body: MistralBody = { model: input.model, messages }
+  // Mistral's models either reason or don't; "low" turns it off, anything else leaves
+  // the model's default.
+  if (input.effort === "low") {
     body.reasoning_effort = "none"
   }
+  if (input.schema !== undefined) {
+    body.response_format = jsonSchemaFormat(input.schema)
+  }
   return body
 }
 
-function geminiBody(
-  text: string,
-  images: readonly ChatImage[],
-  effort: ChatInput["effort"],
-): GeminiBody {
+function geminiBody(input: ChatInput): GeminiBody {
   const body: GeminiBody = {
-    contents: [{ role: "user", parts: geminiParts(text, images) }],
+    contents: [{ role: "user", parts: geminiParts(input.prompt, input.images ?? []) }],
   }
-  if (effort === "low") {
-    body.generationConfig = { thinkingConfig: { thinkingLevel: "low" } }
+  if (input.system !== undefined) {
+    body.systemInstruction = { parts: [{ text: input.system }] }
+  }
+  if (input.effort !== undefined || input.schema !== undefined) {
+    body.generationConfig = {}
+    if (input.effort !== undefined) {
+      body.generationConfig.thinkingConfig = { thinkingLevel: input.effort }
+    }
+    if (input.schema !== undefined) {
+      body.generationConfig.responseMimeType = "application/json"
+      body.generationConfig.responseJsonSchema = input.schema.schema
+    }
   }
   return body
+}
+
+function jsonSchemaFormat(schema: ReplySchema): JsonSchemaFormat {
+  return {
+    type: "json_schema",
+    json_schema: { name: schema.name, strict: true, schema: schema.schema },
+  }
 }
 
 function claudeContent(
@@ -269,7 +320,7 @@ function claudeContent(
   }
   const parts: (TextPart | ClaudeImagePart)[] = [{ type: "text", text }]
   for (const image of images) {
-    parts.push({ type: "text", text: image.id })
+    parts.push({ type: "text", text: frameLabel(image.id) })
     parts.push({
       type: "image",
       source: { type: "base64", media_type: "image/png", data: pngBase64(image.png) },
@@ -287,11 +338,8 @@ function openAiContent(
   }
   const parts: (TextPart | OpenAiImagePart)[] = [{ type: "text", text }]
   for (const image of images) {
-    parts.push({ type: "text", text: image.id })
-    parts.push({
-      type: "image_url",
-      image_url: { url: pngDataUrl(image.png) },
-    })
+    parts.push({ type: "text", text: frameLabel(image.id) })
+    parts.push({ type: "image_url", image_url: { url: pngDataUrl(image.png) } })
   }
   return parts
 }
@@ -305,7 +353,7 @@ function mistralContent(
   }
   const parts: (TextPart | MistralImagePart)[] = [{ type: "text", text }]
   for (const image of images) {
-    parts.push({ type: "text", text: image.id })
+    parts.push({ type: "text", text: frameLabel(image.id) })
     parts.push({ type: "image_url", image_url: pngDataUrl(image.png) })
   }
   return parts
@@ -317,12 +365,14 @@ function geminiParts(
 ): (GeminiTextPart | GeminiImagePart)[] {
   const parts: (GeminiTextPart | GeminiImagePart)[] = [{ text }]
   for (const image of images) {
-    parts.push({ text: image.id })
-    parts.push({
-      inlineData: { mimeType: "image/png", data: pngBase64(image.png) },
-    })
+    parts.push({ text: frameLabel(image.id) })
+    parts.push({ inlineData: { mimeType: "image/png", data: pngBase64(image.png) } })
   }
   return parts
+}
+
+function frameLabel(id: string): string {
+  return `Frame for line [${id}]:`
 }
 
 function pngBase64(png: Uint8Array): string {
@@ -333,35 +383,63 @@ function pngDataUrl(png: Uint8Array): string {
   return `data:image/png;base64,${pngBase64(png)}`
 }
 
-function readChatBody(text: string): ChatReply {
+function readJsonBody(text: string): JsonReply {
   const parsed = parseJson(text)
-  if (parsed === undefined) {
-    return unusable("the reply is not JSON", text)
-  }
-  const direct = readLinesOrReason(parsed)
-  if (Array.isArray(direct)) {
-    return { lines: direct }
-  }
   if (!isRecord(parsed)) {
-    return unusable("the reply is not an object", text)
+    return unusable("the reply is not a JSON object", text, null)
   }
+  const usage = readUsage(parsed)
   const assistant = assistantText(parsed)
   if (assistant === undefined) {
-    return unusable(`the reply has no text${noTextDetail(parsed)}`, text)
+    return unusable(`the reply has no text${noTextDetail(parsed)}`, text, usage)
   }
-  const json = jsonFromAssistant(assistant)
-  if (json === undefined) {
-    return unusable("the reply text is not the requested JSON", assistant)
+  const value = jsonFromAssistant(assistant)
+  if (value === undefined) {
+    return unusable("the reply text is not JSON", assistant, usage)
   }
-  const nested = readLinesOrReason(json)
-  if (Array.isArray(nested)) {
-    return { lines: nested }
-  }
-  return unusable(nested, assistant)
+  return { value, usage }
 }
 
-function unusable(reason: string, excerpt: string): Unusable {
-  return { refused: true, reason, excerpt: excerpt.slice(0, 2000) }
+function unusable(reason: string, excerpt: string, usage: Usage | null): Unusable {
+  return { refused: true, reason, excerpt: excerpt.slice(0, 2000), usage }
+}
+
+// Claude: input_tokens + cache reads/writes; OpenAI and Mistral: prompt/completion
+// tokens; Gemini: usageMetadata, where thinking is counted apart from the answer.
+export function readUsage(body: Record<string, unknown>): Usage | null {
+  const usage = body.usage
+  if (isRecord(usage)) {
+    if (typeof usage.input_tokens === "number") {
+      const read = numberOr(usage.cache_read_input_tokens)
+      const written = numberOr(usage.cache_creation_input_tokens)
+      return {
+        input: usage.input_tokens + read + written,
+        output: numberOr(usage.output_tokens),
+        cached: read,
+      }
+    }
+    if (typeof usage.prompt_tokens === "number") {
+      const details = usage.prompt_tokens_details
+      return {
+        input: usage.prompt_tokens,
+        output: numberOr(usage.completion_tokens),
+        cached: isRecord(details) ? numberOr(details.cached_tokens) : 0,
+      }
+    }
+  }
+  const meta = body.usageMetadata
+  if (isRecord(meta) && typeof meta.promptTokenCount === "number") {
+    return {
+      input: meta.promptTokenCount,
+      output: numberOr(meta.candidatesTokenCount) + numberOr(meta.thoughtsTokenCount),
+      cached: numberOr(meta.cachedContentTokenCount),
+    }
+  }
+  return null
+}
+
+function numberOr(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 // Gemini explains an empty reply with a finish reason (SAFETY, MAX_TOKENS, ...) or a
@@ -375,6 +453,14 @@ function noTextDetail(body: Record<string, unknown>): string {
   const first: unknown = isUnknownArray(candidates) ? candidates[0] : undefined
   if (isRecord(first) && typeof first.finishReason === "string") {
     return ` (finish reason ${first.finishReason})`
+  }
+  const choices = body.choices
+  const choice: unknown = isUnknownArray(choices) ? choices[0] : undefined
+  if (isRecord(choice) && typeof choice.finish_reason === "string") {
+    return ` (finish reason ${choice.finish_reason})`
+  }
+  if (typeof body.stop_reason === "string") {
+    return ` (stop reason ${body.stop_reason})`
   }
   return ""
 }
@@ -487,113 +573,9 @@ function parseJsonValue(text: string): unknown {
   }
 }
 
+// A model sometimes writes the subtitle line break \N into JSON unescaped.
 function relaxLineBreaks(text: string): string {
   return text.replace(/(?<!\\)\\N/g, "\\\\N")
-}
-
-function readLinesOrReason(value: unknown): LineResult[] | string {
-  if (!isRecord(value) || !isUnknownArray(value.lines)) {
-    return "the reply has no lines list"
-  }
-  const lines: LineResult[] = []
-  for (const [index, item] of value.lines.entries()) {
-    const line = readLine(item)
-    if (line === undefined) {
-      return `line ${String(index + 1)} is not valid: ${JSON.stringify(item)}`
-    }
-    lines.push(line)
-  }
-  return lines
-}
-
-function readLine(value: unknown): LineResult | undefined {
-  if (!isRecord(value)) {
-    return undefined
-  }
-  const id = readLineId(value.id)
-  const words = value.words
-  const mark = value.mark
-  if (id === undefined || typeof words !== "string" || !isMark(mark)) {
-    return undefined
-  }
-  const line: LineResult = { id, words, mark }
-  if (!copyOptional(line, value)) {
-    return undefined
-  }
-  return line
-}
-
-function readLineId(value: unknown): string | undefined {
-  if (typeof value === "string") {
-    return value
-  }
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return String(value)
-  }
-  return undefined
-}
-
-function copyOptional(line: LineResult, value: Record<string, unknown>): boolean {
-  if ("reason" in value && value.reason !== undefined && value.reason !== null) {
-    if (typeof value.reason !== "string") {
-      return false
-    }
-    line.reason = value.reason
-  }
-  if ("glossary" in value && value.glossary !== undefined && value.glossary !== null) {
-    const glossary = readGlossary(value.glossary)
-    if (glossary === undefined) {
-      return false
-    }
-    line.glossary = glossary
-  }
-  if ("hardIds" in value && value.hardIds !== undefined && value.hardIds !== null) {
-    const hardIds = readStringList(value.hardIds)
-    if (hardIds === undefined) {
-      return false
-    }
-    line.hardIds = hardIds
-  }
-  if ("frameIds" in value && value.frameIds !== undefined && value.frameIds !== null) {
-    const frameIds = readStringList(value.frameIds)
-    if (frameIds === undefined) {
-      return false
-    }
-    line.frameIds = frameIds
-  }
-  return true
-}
-
-function readGlossary(value: unknown): { source: string; pt: string }[] | undefined {
-  if (!isUnknownArray(value)) {
-    return undefined
-  }
-  const entries: { source: string; pt: string }[] = []
-  for (const item of value) {
-    if (!isRecord(item) || typeof item.source !== "string" || typeof item.pt !== "string") {
-      return undefined
-    }
-    entries.push({ source: item.source, pt: item.pt })
-  }
-  return entries
-}
-
-function readStringList(value: unknown): string[] | undefined {
-  if (!isUnknownArray(value)) {
-    return undefined
-  }
-  const items: string[] = []
-  for (const item of value) {
-    if (typeof item !== "string") {
-      return undefined
-    }
-    items.push(item)
-  }
-  return items
-}
-
-function isMark(value: unknown): value is LineResult["mark"] {
-  return value === "clean" || value === "doubt" || value === "hard-call" || value === "mild"
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

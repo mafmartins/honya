@@ -71,6 +71,11 @@ export interface RunnerDeps {
   newId(): string
   sleep(ms: number): Promise<void>
   emit(event: TranslateEvent): void
+  // Records a provider reply the pipeline could not fully use.
+  logProblem?(
+    provider: ProviderId,
+    problem: { tier: "cheap" | "strong"; problem: string; excerpt?: string },
+  ): void
 }
 
 export interface Runner {
@@ -185,6 +190,14 @@ export function createRunner(deps: RunnerDeps): Runner {
           break
         case "batch-done":
           batchDone.value = { index: event.index, total: event.total, lines: event.lines }
+          break
+        case "problem":
+          deps.logProblem?.(
+            session.provider,
+            event.excerpt === undefined
+              ? { tier: event.tier, problem: event.reason }
+              : { tier: event.tier, problem: event.reason, excerpt: event.excerpt },
+          )
           break
       }
     }

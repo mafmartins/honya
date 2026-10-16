@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest"
 import { ProviderError, type ProviderErrorKind } from "../../src/core/providers/errors"
 import { withRetry, RETRY_DELAYS_MS } from "../../src/core/providers/retry"
 import type { Completer } from "../../src/core/pipeline/run"
+import { LINES_SCHEMA } from "../../src/core/pipeline/schemas"
 
-const request = { tier: "cheap" as const, prompt: "0: Hello." }
-const success = { lines: [{ id: "0", words: "Olá.", mark: "clean" as const }] }
+const request = { tier: "cheap" as const, system: "", prompt: "[0] Hello.", schema: LINES_SCHEMA }
+const success = { value: { lines: [], terms: [] } }
 
 function failing(
   kind: ProviderErrorKind,

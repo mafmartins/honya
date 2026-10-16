@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Completer } from "../../../src/core/pipeline/run"
+import { echo, isBrief } from "../../support/fakeModel"
 import { providerError } from "../../../src/core/providers/errors"
 import { createSessionStore } from "../../../src/main/translate/session"
 import {
@@ -19,13 +20,6 @@ function scriptWith(count: number, style = "Default"): string {
     return `Dialogue: 0,0:${mm}:${ss}.00,0:${mm}:${ss}.50,${style},,0,0,0,,Line ${String(i)}.`
   }).join("\n")
   return `[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n${events}\n`
-}
-
-const echo: Completer = (request) => {
-  const lines = [...request.prompt.matchAll(/^(\d+):/gm)].flatMap((m) =>
-    m[1] === undefined ? [] : [{ id: m[1], words: `pt ${m[1]}`, mark: "clean" as const }],
-  )
-  return Promise.resolve({ lines })
 }
 
 const REQUEST: TranslateRequest = {
@@ -261,7 +255,7 @@ describe("createRunner", () => {
     const batchPrompts: string[] = []
     const echo = h.state.complete
     h.state.complete = (request) => {
-      if (!request.prompt.includes('"frameIds": string[]')) {
+      if (!isBrief(request)) {
         batchPrompts.push(request.prompt)
       }
       return echo(request)

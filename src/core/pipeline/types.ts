@@ -15,7 +15,4 @@ export interface LineResult {
   words: string
   mark: "clean" | "doubt" | "hard-call" | "mild"
   reason?: string
-  glossary?: { source: string; pt: string }[]
-  hardIds?: string[]
-  frameIds?: string[]
 }

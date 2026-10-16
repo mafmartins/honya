@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest"
-import { bundledFfmpegPath } from "../../src/core/frames/path"
+import { bundledFfmpegPath, devFfmpegPath } from "../../src/core/frames/path"
 import { grabFrame } from "../../src/core/frames/grab"
 
 describe("frames", () => {
   it("points at the unpacked binary and never at PATH", () => {
     expect(bundledFfmpegPath("/app/Resources", "darwin")).toBe("/app/Resources/ffmpeg/ffmpeg")
     expect(bundledFfmpegPath("/app/Resources", "win32")).toBe("/app/Resources/ffmpeg/ffmpeg.exe")
+  })
+
+  it("uses the build folder for the host platform when running unpackaged", () => {
+    expect(devFfmpegPath("/repo", "darwin")).toBe("/repo/build/ffmpeg/mac/ffmpeg")
+    expect(devFfmpegPath("/repo", "win32")).toBe("/repo/build/ffmpeg/win/ffmpeg.exe")
+    expect(devFfmpegPath("/repo", "linux")).toBe("/repo/build/ffmpeg/linux/ffmpeg")
   })
 
   it("asks ffmpeg for one png at the cue midpoint", async () => {

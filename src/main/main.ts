@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { DialogueCue } from "../core/ass/script"
 import { grabFrame } from "../core/frames/grab"
-import { bundledFfmpegPath } from "../core/frames/path"
+import { bundledFfmpegPath, devFfmpegPath } from "../core/frames/path"
 import { compileCard } from "../core/library/card"
 import { createFileStore } from "../core/library/fileStore"
 import type { StyleCard } from "../core/library/types"
@@ -232,7 +232,7 @@ async function grabFrames(
 ): Promise<{ frames: Map<string, Uint8Array>; notes: string[] }> {
   const frames = new Map<string, Uint8Array>()
   const notes: string[] = []
-  const ffmpegPath = bundledFfmpegPath(process.resourcesPath, process.platform)
+  const ffmpegPath = ffmpegLocation()
   for (const cue of cues) {
     try {
       const bytes = await grabFrame({
@@ -286,7 +286,13 @@ function runFfmpeg(command: string, args: string[]): Promise<{ code: number; std
 }
 
 function ffmpegReady(): boolean {
-  return existsSync(bundledFfmpegPath(process.resourcesPath, process.platform))
+  return existsSync(ffmpegLocation())
+}
+
+function ffmpegLocation(): string {
+  return app.isPackaged
+    ? bundledFfmpegPath(process.resourcesPath, process.platform)
+    : devFfmpegPath(app.getAppPath(), process.platform)
 }
 
 function keyPath(): string {

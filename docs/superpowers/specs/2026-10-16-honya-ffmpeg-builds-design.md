@@ -63,7 +63,7 @@ The exact flag list is the builder's to finalize; the rule is "the smallest set 
 
 **Publishing.** The repository is public (made public on 2026-10-16 for this reason), so release assets download anonymously and the LGPL source material is reachable by anyone. The workflow runs on manual dispatch and when `build/ffmpeg/VERSION` changes on `main`. It publishes a GitHub release in this repo tagged `ffmpeg-<version>-<n>` with:
 
-- `ffmpeg-mac.zip`, `ffmpeg-win.zip`, `ffmpeg-linux.zip`, each with a `.sha256`
+- `ffmpeg-mac`, `ffmpeg-win.exe`, `ffmpeg-linux` (plain binaries, so fetching needs no unzip; the plan's call), each with a `.sha256`
 - `SOURCES.txt` (or similar): the source tarball URL and SHA256, the dav1d and zlib versions and hashes (and, for macOS, that the system zlib is used), and the full configure line per platform
 - the ffmpeg source tarball itself, and `COPYING.LGPLv2.1`
 

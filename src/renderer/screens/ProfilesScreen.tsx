@@ -1,5 +1,8 @@
 import { VARIANTS, type Variant } from "../../shared/api"
 import { BaseSection } from "../components/BaseSection"
+import { KeysSection } from "../components/KeysSection"
+import { ModelsSection } from "../components/ModelsSection"
+import { SeriesSection } from "../components/SeriesSection"
 
 export function ProfilesScreen(props: {
   variant: Variant
@@ -31,7 +34,11 @@ export function ProfilesScreen(props: {
         <div>
           <BaseSection key={props.variant} variant={props.variant} />
         </div>
-        <div className="decision" />
+        <div className="decision">
+          <SeriesSection key={props.variant} variant={props.variant} />
+          <KeysSection />
+          <ModelsSection />
+        </div>
       </div>
     </>
   )

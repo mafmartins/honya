@@ -95,18 +95,40 @@ export function TranslateScreen(props: {
     [api, act, apply],
   )
 
+  const resumeSession = useCallback(
+    (id: string): void => {
+      act(async () => {
+        try {
+          await api.resumeTranslation(id)
+        } catch (error) {
+          setStopping(false)
+          setHalt("failed")
+          setPhase("halted")
+          throw error
+        }
+      })
+    },
+    [api, act],
+  )
+
   useEffect(() => {
-    const unsubscribe = api.onTranslateEvent((event) => {
+    return api.onTranslateEvent((event) => {
       if (sessionId.current === null) {
         early.current.push(event)
       } else if (event.sessionId === sessionId.current) {
         apply(event)
       }
     })
+  }, [api, apply])
+
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) {
+      return
+    }
+    started.current = true
     if (target.kind === "resume") {
-      act(async () => {
-        await api.resumeTranslation(target.id)
-      })
+      resumeSession(target.id)
     } else {
       act(async () => {
         const script = await api.prepareTranslation(
@@ -124,8 +146,7 @@ export function TranslateScreen(props: {
         )
       })
     }
-    return unsubscribe
-  }, [api, act, apply, begin, target])
+  }, [api, act, begin, resumeSession, target])
 
   const resume = (): void => {
     const id = sessionId.current
@@ -134,14 +155,7 @@ export function TranslateScreen(props: {
     }
     report(null)
     setPhase("running")
-    act(async () => {
-      try {
-        await api.resumeTranslation(id)
-      } catch (error) {
-        setPhase("halted")
-        throw error
-      }
-    })
+    resumeSession(id)
   }
 
   return (
@@ -183,7 +197,12 @@ export function TranslateScreen(props: {
           onStop={() => {
             setStopping(true)
             act(async () => {
-              await api.stopTranslation()
+              try {
+                await api.stopTranslation()
+              } catch (error) {
+                setStopping(false)
+                throw error
+              }
             })
           }}
         />

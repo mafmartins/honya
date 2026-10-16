@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { useState } from "react"
+import { StrictMode, useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ErrorContext } from "../../src/renderer/action"
 import { App, type TranslateTarget } from "../../src/renderer/App"
@@ -242,6 +242,47 @@ describe("translate screen", () => {
     render(<Harness api={api} target={NEW_TARGET} />)
     expect((await screen.findByRole("alert")).textContent).toBe("Cannot read it.")
     expect(screen.getByRole("button", { name: "Back" })).toBeTruthy()
+  })
+
+  it("recovers from a resume that is refused", async () => {
+    const api = fakeApi({
+      resumeTranslation: () => Promise.reject(new Error("That translation no longer exists.")),
+    })
+    render(<Harness api={api} target={{ kind: "resume", id: "s9" }} />)
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "That translation no longer exists.",
+    )
+    expect(screen.getByRole("button", { name: "Back to Start" })).toBeTruthy()
+  })
+
+  it("starts once under StrictMode, for a new and a resume target", async () => {
+    const startTranslation = vi.fn(() => Promise.resolve("session-1"))
+    const resumeTranslation = vi.fn((id: string) => Promise.resolve(id))
+    const api = fakeApi({ startTranslation, resumeTranslation })
+    render(
+      <StrictMode>
+        <Harness api={api} target={NEW_TARGET} />
+      </StrictMode>,
+    )
+    await screen.findByRole("button", { name: "Stop" })
+    expect(startTranslation).toHaveBeenCalledTimes(1)
+    cleanup()
+    render(
+      <StrictMode>
+        <Harness api={api} target={{ kind: "resume", id: "s9" }} />
+      </StrictMode>,
+    )
+    await screen.findByRole("button", { name: "Stop" })
+    expect(resumeTranslation).toHaveBeenCalledTimes(1)
+  })
+
+  it("re-enables Stop when stopping is refused", async () => {
+    const api = fakeApi({ stopTranslation: () => Promise.reject(new Error("Nothing is running.")) })
+    render(<Harness api={api} target={NEW_TARGET} />)
+    fireEvent.click(await screen.findByRole("button", { name: "Stop" }))
+    expect((await screen.findByRole("alert")).textContent).toBe("Nothing is running.")
+    const stop = screen.getByRole("button", { name: "Stop" })
+    expect(stop instanceof HTMLButtonElement && stop.disabled).toBe(false)
   })
 
   it("unsubscribes on unmount", () => {

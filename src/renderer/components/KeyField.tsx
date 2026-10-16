@@ -9,9 +9,9 @@ export function KeyField(props: { provider: ProviderId; onSaved: () => void }): 
   const [key, setKey] = useState("")
   const label = `${props.provider} key`
   return (
-    <div className="picked">
-      <label>
-        <span>{label}</span>
+    <div className="field">
+      <span>{label}</span>
+      <div className="picked">
         <input
           type="password"
           aria-label={label}
@@ -20,21 +20,21 @@ export function KeyField(props: { provider: ProviderId; onSaved: () => void }): 
             setKey(event.target.value)
           }}
         />
-      </label>
-      <button
-        type="button"
-        className="action"
-        disabled={key.trim() === ""}
-        onClick={() => {
-          act(async () => {
-            await api.setKey(props.provider, key.trim())
-            setKey("")
-            props.onSaved()
-          })
-        }}
-      >
-        Save key
-      </button>
+        <button
+          type="button"
+          className="action"
+          disabled={key.trim() === ""}
+          onClick={() => {
+            act(async () => {
+              await api.setKey(props.provider, key.trim())
+              setKey("")
+              props.onSaved()
+            })
+          }}
+        >
+          Save key
+        </button>
+      </div>
     </div>
   )
 }

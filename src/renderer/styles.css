@@ -8,7 +8,7 @@ body {
   margin: 0;
   min-height: 100vh;
   box-sizing: border-box;
-  padding: 32px 16px;
+  padding: 24px 16px;
   display: grid;
   place-items: center;
   font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
@@ -127,10 +127,19 @@ p {
   gap: 8px;
 }
 
-.picked span {
+.picked > .slot {
   flex: 1;
   border: 1.5px dashed #2a2420;
   padding: 8px 10px;
+}
+
+.picked > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.picked > button {
+  margin: 0;
 }
 
 .muted {

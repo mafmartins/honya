@@ -164,7 +164,9 @@ function openWindow(): void {
   const rendererPath = join(app.getAppPath(), "dist", "renderer", "index.html")
   const window = new BrowserWindow({
     width: 1100,
-    height: 760,
+    height: 820,
+    minWidth: 760,
+    minHeight: 720,
     title: "Honya",
     webPreferences: {
       preload: join(app.getAppPath(), "dist", "preload.cjs"),

@@ -119,4 +119,58 @@ describe("completeChat", () => {
     expect(body).toContain("Translate: Hi.")
     expect(result).toEqual({ text: "hello" })
   })
+
+  it("ignores claude thinking blocks and leaves room for thinking", async () => {
+    let body = ""
+    const lines = JSON.stringify({ lines: [{ id: "0", words: "Olá.", mark: "clean" }] })
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      await Promise.resolve()
+      body = typeof init?.body === "string" ? init.body : ""
+      return new Response(
+        JSON.stringify({
+          content: [
+            { type: "thinking", thinking: "{ not the answer }", signature: "x" },
+            { type: "text", text: lines },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    const result = await completeChat({
+      provider: "claude",
+      model: defaultModels("claude").cheap,
+      apiKey: "secret",
+      prompt: "0: Hello.",
+      fetch: fetchImpl,
+    })
+    expect(result).toEqual({ lines: [{ id: "0", words: "Olá.", mark: "clean" }] })
+    expect(JSON.parse(body)).toMatchObject({ max_tokens: 16000 })
+  })
+
+  it("ignores gemini thought parts", async () => {
+    const lines = JSON.stringify({ lines: [{ id: "0", words: "Olá.", mark: "clean" }] })
+    const fetchImpl: typeof fetch = async () => {
+      await Promise.resolve()
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "Thinking about {the batch}", thought: true }, { text: lines }],
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    const result = await completeChat({
+      provider: "gemini",
+      model: defaultModels("gemini").cheap,
+      apiKey: "secret",
+      prompt: "0: Hello.",
+      fetch: fetchImpl,
+    })
+    expect(result).toEqual({ lines: [{ id: "0", words: "Olá.", mark: "clean" }] })
+  })
 })

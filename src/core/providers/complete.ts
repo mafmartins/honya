@@ -80,7 +80,7 @@ interface ProviderRequest {
 const JSON_INSTRUCTION =
   'Return JSON { "lines": [{ "id", "words", "mark", "reason", "glossary" }] } and keep every \\N.'
 
-const CLAUDE_MAX_TOKENS = 8192
+const CLAUDE_MAX_TOKENS = 16000
 
 export async function completeChat(input: ChatInput): Promise<ChatReply> {
   const body = await send(input, buildRequest(input, true))
@@ -346,7 +346,7 @@ function textFromContent(value: unknown): string | undefined {
   }
   const texts: string[] = []
   for (const part of value) {
-    if (!isRecord(part)) {
+    if (!isRecord(part) || isThinking(part)) {
       continue
     }
     if (typeof part.text !== "string") {
@@ -358,6 +358,10 @@ function textFromContent(value: unknown): string | undefined {
     return undefined
   }
   return texts.join("")
+}
+
+function isThinking(part: Record<string, unknown>): boolean {
+  return part.thought === true || part.type === "thinking" || part.type === "redacted_thinking"
 }
 
 function jsonFromAssistant(text: string): unknown {

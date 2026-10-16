@@ -23,13 +23,13 @@ npm run fetch:ffmpeg        # this machine's platform
 npm run fetch:ffmpeg -- --all
 ```
 
-This downloads the release pinned in [`VERSION`](VERSION) into `build/ffmpeg/<os>/`, checks the SHA256 and refuses anything that doesn't match. `npm run pack` runs it first, so a package never ships without ffmpeg; `npm start` uses the same folder.
+This downloads the release pinned in [`VERSION`](VERSION) into `build/ffmpeg/<os>/`: the binary plus `COPYING.LGPLv2.1`, `COPYING.dav1d` and `SOURCES.txt`, which are packaged next to it so the app carries the licences and the source details. Every file is checked against the SHA256 recorded in `VERSION` (`assets`), never against a checksum from the release itself, and nothing that doesn't match is written. When everything already matches it makes no network request, so packing works offline. `npm run pack` runs it first, so a package never ships without ffmpeg; `npm start` uses the same folder.
 
 ## Changing the build
 
 - **Flags:** [`scripts/ffmpeg/flags.sh`](../../scripts/ffmpeg/flags.sh). Keep it the smallest set that passes the smoke test.
 - **Versions:** edit [`VERSION`](VERSION) (ffmpeg, dav1d and zlib versions with their tarball SHA256) and **increase `build`**. A published tag never changes; the workflow refuses to overwrite one.
-- Push to `main` (or run the workflow by hand). When it finishes, `npm run fetch:ffmpeg` picks up the new release.
+- Push to `main` (or run the workflow by hand). When the release is published, run `npm run ffmpeg:pin`: it downloads every release file once, records their SHA256 under `assets` in `VERSION`, and you commit that. From then on `npm run fetch:ffmpeg` accepts only those exact bytes.
 
 To build locally: `scripts/ffmpeg/build.sh <mac-arm64|mac-x86_64|win|linux>` (needs meson, ninja and, for x86, nasm), then `node scripts/ffmpeg/check.ts <os> out/<target>/ffmpeg`.
 

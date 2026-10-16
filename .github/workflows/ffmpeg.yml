@@ -184,6 +184,9 @@ jobs:
           tarball="$(scripts/ffmpeg/fetch-source.sh "https://ffmpeg.org/releases/ffmpeg-$version.tar.xz" "$(node scripts/ffmpeg/pins.ts ffmpeg.sha256)" out/sources)"
           cp "$tarball" release/
           tar -xJf "$tarball" -O "ffmpeg-$version/COPYING.LGPLv2.1" > release/COPYING.LGPLv2.1
+          dav1d_version="$(node scripts/ffmpeg/pins.ts dav1d.version)"
+          dav1d_tarball="$(scripts/ffmpeg/fetch-source.sh "https://downloads.videolan.org/pub/videolan/dav1d/$dav1d_version/dav1d-$dav1d_version.tar.xz" "$(node scripts/ffmpeg/pins.ts dav1d.sha256)" out/sources)"
+          tar -xJf "$dav1d_tarball" -O "dav1d-$dav1d_version/COPYING" > release/COPYING.dav1d
           {
             echo "LGPL ffmpeg builds for Honya ($tag)"
             echo
@@ -191,6 +194,8 @@ jobs:
             echo "- ffmpeg $version: https://ffmpeg.org/releases/ffmpeg-$version.tar.xz sha256 $(node scripts/ffmpeg/pins.ts ffmpeg.sha256) (attached)"
             echo "- dav1d $(node scripts/ffmpeg/pins.ts dav1d.version): https://downloads.videolan.org/pub/videolan/dav1d/ sha256 $(node scripts/ffmpeg/pins.ts dav1d.sha256)"
             echo "- zlib $(node scripts/ffmpeg/pins.ts zlib.version): https://github.com/madler/zlib/releases/download/v$(node scripts/ffmpeg/pins.ts zlib.version)/zlib-$(node scripts/ffmpeg/pins.ts zlib.version).tar.gz sha256 $(node scripts/ffmpeg/pins.ts zlib.sha256) (Windows and Linux; macOS uses the system zlib)"
+            echo
+            echo "Licences: ffmpeg is LGPL v2.1 or later (COPYING.LGPLv2.1). dav1d is BSD-2-Clause (COPYING.dav1d). zlib is under the zlib licence."
             echo
             echo "Configure lines:"
             echo "- macOS arm64: $(cat artifacts/ffmpeg-mac/configure-line-arm64.txt)"

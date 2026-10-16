@@ -32,10 +32,14 @@ describe("review", () => {
 
   it("keeps the edited line when the rule is declined", () => {
     const edited = applyLineEdit(lines, 1, "Himmel ficou.")
-    const next = applyProposal(edited, {
-      siblings: [{ eventIndex: 0, words: "Olá, Himmel." }],
-      rule: { kind: "glossary", source: "Himmel", pt: "Himmel" },
-    }, "decline-rule")
+    const next = applyProposal(
+      edited,
+      {
+        siblings: [{ eventIndex: 0, words: "Olá, Himmel." }],
+        rule: { kind: "glossary", source: "Himmel", pt: "Himmel" },
+      },
+      "decline-rule",
+    )
     expect(at(next.lines, 1).words).toBe("Himmel ficou.")
     expect(at(next.lines, 0).words).toBe("Olá. {note: dúvida}")
     expect(next.rule).toBeNull()
@@ -100,8 +104,12 @@ describe("review", () => {
 
   it("returns null when the structural check is refused, invalid, or throws", async () => {
     const edit = { eventIndex: 1, before: "Himmel.", after: "Himmel ficou." }
-    await expect(proposeStructural(edit, lines, () => Promise.resolve({ refused: true }))).resolves.toBeNull()
-    await expect(proposeStructural(edit, lines, () => Promise.resolve({ text: "not json" }))).resolves.toBeNull()
+    await expect(
+      proposeStructural(edit, lines, () => Promise.resolve({ refused: true })),
+    ).resolves.toBeNull()
+    await expect(
+      proposeStructural(edit, lines, () => Promise.resolve({ text: "not json" })),
+    ).resolves.toBeNull()
     await expect(
       proposeStructural(edit, lines, () => {
         throw new Error("offline")

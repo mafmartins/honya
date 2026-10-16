@@ -81,7 +81,13 @@ describe("render", () => {
       preset: "balanced",
       provider: "mistral",
       openFlagCount: 3,
-      current: { words: "Estás a dizer-me que aquela coisa é um dragão?", note: "linha longa para o cue", english: "You're telling me that thing is a dragon?", before: "O Himmel teria sorrido.", after: "Vamos andando." },
+      current: {
+        words: "Estás a dizer-me que aquela coisa é um dragão?",
+        note: "linha longa para o cue",
+        english: "You're telling me that thing is a dragon?",
+        before: "O Himmel teria sorrido.",
+        after: "Vamos andando.",
+      },
       proposal: null,
     })
     expect(html).toContain("Frieren")
@@ -194,10 +200,19 @@ describe("render", () => {
       preset: "balanced",
       provider: "mistral",
       openFlagCount: 3,
-      current: { words: "Estás a dizer-me que aquela coisa é um dragão?", note: "linha longa para o cue", english: "You're telling me that thing is a dragon?", before: "O Himmel teria sorrido.", after: "Vamos andando." },
+      current: {
+        words: "Estás a dizer-me que aquela coisa é um dragão?",
+        note: "linha longa para o cue",
+        english: "You're telling me that thing is a dragon?",
+        before: "O Himmel teria sorrido.",
+        after: "Vamos andando.",
+      },
       proposal: null,
     }
-    const page = readFileSync(fileURLToPath(new URL("../../src/renderer/index.html", import.meta.url)), "utf8")
+    const page = readFileSync(
+      fileURLToPath(new URL("../../src/renderer/index.html", import.meta.url)),
+      "utf8",
+    )
     const modulePath = bundleView()
     const browser = readFileSync(modulePath, "utf8")
     expect(page).toContain('from "./view.js"')

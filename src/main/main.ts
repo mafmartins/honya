@@ -8,7 +8,11 @@ import { readAss, type DialogueCue } from "../core/ass/script"
 import { grabFrame } from "../core/frames/grab"
 import { bundledFfmpegPath } from "../core/frames/path"
 import type { Rule, StyleCard } from "../core/library/types"
-import { preflight, type PreflightFailureReason, type PreflightResult } from "../core/pipeline/preflight"
+import {
+  preflight,
+  type PreflightFailureReason,
+  type PreflightResult,
+} from "../core/pipeline/preflight"
 import {
   resumeTranslation,
   runTranslation,
@@ -61,8 +65,7 @@ export type StartResponse =
   | { ok: true; mode: "assisted"; sessionId: string; draft: string; flags: Flag[] }
 
 export type ExportResponse =
-  | { ok: true; outputPath: string }
-  | { ok: false; reason: "flags" | "missing" | "write" }
+  { ok: true; outputPath: string } | { ok: false; reason: "flags" | "missing" | "write" }
 
 interface StoredSavedRun {
   completedBatches: number
@@ -213,7 +216,10 @@ function runPreflight(secrets: SecretStore, request: PreflightRequest): Prefligh
   })
 }
 
-async function startTranslation(secrets: SecretStore, request: StartRequest): Promise<StartResponse> {
+async function startTranslation(
+  secrets: SecretStore,
+  request: StartRequest,
+): Promise<StartResponse> {
   const dialogueStyles = new Set(request.dialogueStyles)
   const cues = readAss(request.ass).filter((cue) => dialogueStyles.has(cue.style))
   const framesRequested = request.frameSetting !== "none"
@@ -242,7 +248,10 @@ async function startTranslation(secrets: SecretStore, request: StartRequest): Pr
   let saved: SavedRun | null = null
   let result = await runBatch(base, saved, previous + 1)
   for (;;) {
-    writeSession(sessionId, sessionRecord(request, outputPath, dialogueStyles, result, grabbed.notes))
+    writeSession(
+      sessionId,
+      sessionRecord(request, outputPath, dialogueStyles, result, grabbed.notes),
+    )
     if (result.saved.completedBatches <= previous) {
       break
     }
@@ -272,7 +281,11 @@ async function startTranslation(secrets: SecretStore, request: StartRequest): Pr
   return { ok: true, mode: "autonomous", sessionId, outputPath, draft: result.ass }
 }
 
-function runBatch(base: RunInput, saved: SavedRun | null, stopAfterBatches: number): Promise<RunResult> {
+function runBatch(
+  base: RunInput,
+  saved: SavedRun | null,
+  stopAfterBatches: number,
+): Promise<RunResult> {
   const input: RunInput = { ...base, stopAfterBatches }
   if (saved === null) {
     return runTranslation(input)
@@ -550,11 +563,11 @@ function readStoredSession(value: unknown): StoredSession | null {
   }
   const saved = readStoredSaved(value.saved)
   if (
-    saved === null
-    || !isMode(value.mode)
-    || typeof value.sourcePath !== "string"
-    || typeof value.outputPath !== "string"
-    || typeof value.draft !== "string"
+    saved === null ||
+    !isMode(value.mode) ||
+    typeof value.sourcePath !== "string" ||
+    typeof value.outputPath !== "string" ||
+    typeof value.draft !== "string"
   ) {
     return null
   }
@@ -579,7 +592,11 @@ function readStoredSaved(value: unknown): StoredSavedRun | null {
   if (!isResultEntries(value.results) || !isGlossary(value.glossary)) {
     return null
   }
-  if (typeof value.brief !== "string" || !isStringList(value.hardIds) || !isStringList(value.frameIds)) {
+  if (
+    typeof value.brief !== "string" ||
+    !isStringList(value.hardIds) ||
+    !isStringList(value.frameIds)
+  ) {
     return null
   }
   return {
@@ -599,7 +616,11 @@ function readPreflightRequest(value: unknown): PreflightRequest | null {
   if (typeof value.styleListAccepted !== "boolean" || !isFiniteNumber(value.dialogueStyleCount)) {
     return null
   }
-  if (typeof value.framesRequested !== "boolean" || !isProviderId(value.provider) || !isPreset(value.preset)) {
+  if (
+    typeof value.framesRequested !== "boolean" ||
+    !isProviderId(value.provider) ||
+    !isPreset(value.preset)
+  ) {
     return null
   }
   if (!isFiniteNumber(value.dialogueLineCount) || !isFiniteNumber(value.frameCount)) {
@@ -622,10 +643,20 @@ function readPreflightRequest(value: unknown): PreflightRequest | null {
 }
 
 function readStartRequest(value: unknown): StartRequest | null {
-  if (!isRecord(value) || !isMode(value.mode) || typeof value.ass !== "string" || !isStringList(value.dialogueStyles)) {
+  if (
+    !isRecord(value) ||
+    !isMode(value.mode) ||
+    typeof value.ass !== "string" ||
+    !isStringList(value.dialogueStyles)
+  ) {
     return null
   }
-  if (!isStyleCard(value.card) || !isPreset(value.preset) || !isProviderId(value.provider) || !isVariant(value.variant)) {
+  if (
+    !isStyleCard(value.card) ||
+    !isPreset(value.preset) ||
+    !isProviderId(value.provider) ||
+    !isVariant(value.variant)
+  ) {
     return null
   }
   if (typeof value.sourcePath !== "string" || typeof value.styleListAccepted !== "boolean") {
@@ -676,7 +707,11 @@ function isStyleCard(value: unknown): value is StyleCard {
   if (!isRecord(value) || !isVariant(value.variant) || typeof value.seriesId !== "string") {
     return false
   }
-  if (!isFiniteNumber(value.revision) || !isFiniteNumber(value.cpsLimit) || typeof value.voice !== "string") {
+  if (
+    !isFiniteNumber(value.revision) ||
+    !isFiniteNumber(value.cpsLimit) ||
+    typeof value.voice !== "string"
+  ) {
     return false
   }
   return isRuleList(value.rules)
@@ -713,7 +748,12 @@ function isResultEntry(value: unknown): value is [string, LineResult] {
 }
 
 function isLineResult(value: unknown): value is LineResult {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.words !== "string" || !isMark(value.mark)) {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.words !== "string" ||
+    !isMark(value.mark)
+  ) {
     return false
   }
   if (value.reason !== undefined && typeof value.reason !== "string") {

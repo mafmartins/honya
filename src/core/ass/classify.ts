@@ -11,16 +11,7 @@ const DIALOGUE_EXACT = new Set([
   "narration",
 ])
 
-const SKIP_EXACT = new Set([
-  "signs",
-  "sign",
-  "song",
-  "songs",
-  "karaoke",
-  "op",
-  "ed",
-  "title",
-])
+const SKIP_EXACT = new Set(["signs", "sign", "song", "songs", "karaoke", "op", "ed", "title"])
 
 function matchesDialogue(lower: string): boolean {
   if (DIALOGUE_EXACT.has(lower)) {
@@ -57,9 +48,7 @@ export function classifyStyle(name: string): StyleClassification {
   return "ambiguous"
 }
 
-export function classifyScript(
-  styles: string[],
-): Map<string, StyleClassification> {
+export function classifyScript(styles: string[]): Map<string, StyleClassification> {
   const result = new Map<string, StyleClassification>()
   const seen = new Set<string>()
   for (const style of styles) {

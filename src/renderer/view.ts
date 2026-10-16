@@ -129,9 +129,15 @@ function screenBody(state: AppState): string {
 }
 
 function renderStart(state: AppState): string {
-  const file = field("file", `<input type="text" name="file" value="${escapeAttr(state.fileName)}">`)
+  const file = field(
+    "file",
+    `<input type="text" name="file" value="${escapeAttr(state.fileName)}">`,
+  )
   const variant = field("variant", selectControl("variant", VARIANTS, state.variant))
-  const series = field("series", `<input type="text" name="series" value="${escapeAttr(state.series)}">`)
+  const series = field(
+    "series",
+    `<input type="text" name="series" value="${escapeAttr(state.series)}">`,
+  )
   const provider = field("provider", selectControl("provider", PROVIDERS, state.provider))
   const preset = field("preset", selectControl("preset", PRESETS, state.preset))
   const create = `<button class="action" type="button" style="color:#e36b1e">Create series profile</button>`
@@ -216,10 +222,18 @@ function renderFlagList(flags: Flag[] | undefined): string {
 
 function renderProfiles(state: AppState): string {
   const profiles = state.profiles
-  const rules = profiles === undefined ? "" : profiles.rules.map((rule) => `<li>${escapeText(formatRule(rule))}</li>`).join("")
+  const rules =
+    profiles === undefined
+      ? ""
+      : profiles.rules.map((rule) => `<li>${escapeText(formatRule(rule))}</li>`).join("")
   const examples =
-    profiles === undefined ? "" : profiles.examples.map((name) => `<li>${escapeText(name)}</li>`).join("")
-  const series = profiles === undefined ? "" : profiles.series.map((name) => `<li>${escapeText(name)}</li>`).join("")
+    profiles === undefined
+      ? ""
+      : profiles.examples.map((name) => `<li>${escapeText(name)}</li>`).join("")
+  const series =
+    profiles === undefined
+      ? ""
+      : profiles.series.map((name) => `<li>${escapeText(name)}</li>`).join("")
   const providerKey = profiles === undefined ? "" : profiles.providerKey
   const cheapModel = profiles === undefined ? "" : profiles.cheapModel
   const strongModel = profiles === undefined ? "" : profiles.strongModel
@@ -227,9 +241,18 @@ function renderProfiles(state: AppState): string {
   const exampleList = `<p>example script names</p><ul class="examples">${examples}</ul>`
   const exampleFile = field("example script", `<input type="file" name="example">`)
   const seriesList = `<p>series</p><ul class="series-list">${series}</ul>`
-  const key = field("provider key", `<input type="password" name="providerKey" value="${escapeAttr(providerKey)}">`)
-  const cheap = field("cheap model id", `<input type="text" name="cheapModel" value="${escapeAttr(cheapModel)}">`)
-  const strong = field("strong model id", `<input type="text" name="strongModel" value="${escapeAttr(strongModel)}">`)
+  const key = field(
+    "provider key",
+    `<input type="password" name="providerKey" value="${escapeAttr(providerKey)}">`,
+  )
+  const cheap = field(
+    "cheap model id",
+    `<input type="text" name="cheapModel" value="${escapeAttr(cheapModel)}">`,
+  )
+  const strong = field(
+    "strong model id",
+    `<input type="text" name="strongModel" value="${escapeAttr(strongModel)}">`,
+  )
   return `<div class="split"><div>${ruleList}${exampleList}${exampleFile}</div><div class="decision">${seriesList}${key}${cheap}${strong}</div></div>`
 }
 

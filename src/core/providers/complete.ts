@@ -176,7 +176,10 @@ function geminiBody(text: string, images: readonly ChatImage[]): GeminiBody {
   }
 }
 
-function claudeContent(text: string, images: readonly ChatImage[]): string | (TextPart | ClaudeImagePart)[] {
+function claudeContent(
+  text: string,
+  images: readonly ChatImage[],
+): string | (TextPart | ClaudeImagePart)[] {
   if (images.length === 0) {
     return text
   }
@@ -191,7 +194,10 @@ function claudeContent(text: string, images: readonly ChatImage[]): string | (Te
   return parts
 }
 
-function openAiContent(text: string, images: readonly ChatImage[]): string | (TextPart | OpenAiImagePart)[] {
+function openAiContent(
+  text: string,
+  images: readonly ChatImage[],
+): string | (TextPart | OpenAiImagePart)[] {
   if (images.length === 0) {
     return text
   }
@@ -206,7 +212,10 @@ function openAiContent(text: string, images: readonly ChatImage[]): string | (Te
   return parts
 }
 
-function mistralContent(text: string, images: readonly ChatImage[]): string | (TextPart | MistralImagePart)[] {
+function mistralContent(
+  text: string,
+  images: readonly ChatImage[],
+): string | (TextPart | MistralImagePart)[] {
   if (images.length === 0) {
     return text
   }
@@ -218,7 +227,10 @@ function mistralContent(text: string, images: readonly ChatImage[]): string | (T
   return parts
 }
 
-function geminiParts(text: string, images: readonly ChatImage[]): (GeminiTextPart | GeminiImagePart)[] {
+function geminiParts(
+  text: string,
+  images: readonly ChatImage[],
+): (GeminiTextPart | GeminiImagePart)[] {
   const parts: (GeminiTextPart | GeminiImagePart)[] = [{ text }]
   for (const image of images) {
     parts.push({ text: image.id })
@@ -261,7 +273,11 @@ function readChatBody(text: string): ChatReply {
 }
 
 function assistantText(body: Record<string, unknown>): string | undefined {
-  return textFromChoices(body.choices) ?? textFromCandidates(body.candidates) ?? textFromContent(body.content)
+  return (
+    textFromChoices(body.choices) ??
+    textFromCandidates(body.candidates) ??
+    textFromContent(body.content)
+  )
 }
 
 function textFromChoices(value: unknown): string | undefined {

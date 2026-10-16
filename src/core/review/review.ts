@@ -70,7 +70,10 @@ export async function proposeStructural(
   }
 }
 
-function applySiblingWords(lines: readonly DraftLine[], siblings: Proposal["siblings"]): DraftLine[] {
+function applySiblingWords(
+  lines: readonly DraftLine[],
+  siblings: Proposal["siblings"],
+): DraftLine[] {
   const wordsByEvent = new Map<number, string>()
   for (const sibling of siblings) {
     wordsByEvent.set(sibling.eventIndex, sibling.words)

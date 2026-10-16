@@ -3,7 +3,7 @@ export interface GrabInput {
   videoPath: string
   startMs: number
   endMs: number
-  run: (command: string, args: string[]) => Promise<{ code: number, stdout: Uint8Array }>
+  run: (command: string, args: string[]) => Promise<{ code: number; stdout: Uint8Array }>
 }
 
 export async function grabFrame(input: GrabInput): Promise<Uint8Array> {

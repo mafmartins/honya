@@ -25,8 +25,7 @@ export interface PreflightSummary {
 export type PreflightFailureReason = "styles" | "key" | "no-dialogue" | "ffmpeg"
 
 export type PreflightResult =
-  | { ok: true; summary: PreflightSummary }
-  | { ok: false; reason: PreflightFailureReason }
+  { ok: true; summary: PreflightSummary } | { ok: false; reason: PreflightFailureReason }
 
 export function proposedOutputPath(sourcePath: string, variant: Variant): string {
   const dot = sourcePath.lastIndexOf(".")

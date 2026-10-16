@@ -177,7 +177,11 @@ async function translateChunk(
   const ids = chunk.map((cue) => String(cue.index))
   const cheapLines = await requestMatching(
     input,
-    batchRequest("cheap", withGlossary(input.card, brief, glossary, cuePromptLines(chunk)), imagesFor(chunk, setting, frames, frameIds)),
+    batchRequest(
+      "cheap",
+      withGlossary(input.card, brief, glossary, cuePromptLines(chunk)),
+      imagesFor(chunk, setting, frames, frameIds),
+    ),
     ids,
     true,
   )
@@ -198,7 +202,12 @@ async function translateChunk(
     input,
     batchRequest(
       "strong",
-      withGlossary(input.card, brief, nextGlossary, escalationPromptLines(escalated, signals, selected)),
+      withGlossary(
+        input.card,
+        brief,
+        nextGlossary,
+        escalationPromptLines(escalated, signals, selected),
+      ),
       imagesFor(escalated, setting, frames, frameIds),
     ),
     escalated.map((cue) => String(cue.index)),
@@ -239,7 +248,12 @@ async function escalateFailedChunk(
     input,
     batchRequest(
       "strong",
-      withGlossary(input.card, brief, glossary, escalationPromptLines(escalated, signals, selected)),
+      withGlossary(
+        input.card,
+        brief,
+        glossary,
+        escalationPromptLines(escalated, signals, selected),
+      ),
       imagesFor(escalated, setting, frames, frameIds),
     ),
     escalated.map((cue) => String(cue.index)),
@@ -273,7 +287,10 @@ async function requestMatching(
   return undefined
 }
 
-function matchesBatch(reply: Reply, expectedIds: readonly string[]): reply is { lines: LineResult[] } {
+function matchesBatch(
+  reply: Reply,
+  expectedIds: readonly string[],
+): reply is { lines: LineResult[] } {
   if (!hasLines(reply)) {
     return false
   }
@@ -313,7 +330,11 @@ function signalsFor(
   return signals
 }
 
-function settleCheap(chunk: readonly DialogueCue[], lines: readonly LineResult[], cpsLimit: number): LineResult[] {
+function settleCheap(
+  chunk: readonly DialogueCue[],
+  lines: readonly LineResult[],
+  cpsLimit: number,
+): LineResult[] {
   return chunk.map((cue) => {
     const line = findLine(lines, String(cue.index))
     if (line === undefined) {

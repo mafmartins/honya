@@ -4,9 +4,7 @@ import { replaceWords } from "./words"
 type Section = 0 | 1 | 2 | 3
 
 type ReplaceOutcome =
-  | { status: "ready"; raw: string }
-  | { status: "unsafe" }
-  | { status: "line-breaks" }
+  { status: "ready"; raw: string } | { status: "unsafe" } | { status: "line-breaks" }
 
 export function applyTranslations(
   original: string,

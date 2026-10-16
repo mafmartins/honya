@@ -21,7 +21,7 @@ interface HonyaApi {
   getModels(provider: ProviderId): Promise<ModelPair>
   preflight(input: PreflightRequest): Promise<PreflightResult>
   start(input: StartRequest): Promise<StartResponse>
-  "export"(input: ExportRequest): Promise<ExportResponse>
+  export(input: ExportRequest): Promise<ExportResponse>
 }
 
 const honya: HonyaApi = {
@@ -133,7 +133,11 @@ function readStartResponse(value: unknown): StartResponse | null {
     return isPreflightReason(value.reason) ? { ok: false, reason: value.reason } : null
   }
   if (value.mode === "autonomous") {
-    if (typeof value.sessionId !== "string" || typeof value.outputPath !== "string" || typeof value.draft !== "string") {
+    if (
+      typeof value.sessionId !== "string" ||
+      typeof value.outputPath !== "string" ||
+      typeof value.draft !== "string"
+    ) {
       return null
     }
     return {
@@ -144,13 +148,23 @@ function readStartResponse(value: unknown): StartResponse | null {
       draft: value.draft,
     }
   }
-  if (value.mode !== "assisted" || typeof value.sessionId !== "string" || typeof value.draft !== "string") {
+  if (
+    value.mode !== "assisted" ||
+    typeof value.sessionId !== "string" ||
+    typeof value.draft !== "string"
+  ) {
     return null
   }
   if (!isFlagList(value.flags)) {
     return null
   }
-  return { ok: true, mode: "assisted", sessionId: value.sessionId, draft: value.draft, flags: value.flags }
+  return {
+    ok: true,
+    mode: "assisted",
+    sessionId: value.sessionId,
+    draft: value.draft,
+    flags: value.flags,
+  }
 }
 
 function readExportResponse(value: unknown): ExportResponse | null {

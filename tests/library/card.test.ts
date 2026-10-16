@@ -7,7 +7,12 @@ describe("style card", () => {
     const pt = importExample(emptyBase("pt-pt"), "Olá.")
     const br = emptyBase("pt-br")
     const series = { id: "frieren", variant: "pt-pt" as const, name: "Frieren", rules: [] }
-    const saved = saveRule(pt, series, { kind: "glossary", source: "Himmel", pt: "Himmel" }, "series")
+    const saved = saveRule(
+      pt,
+      series,
+      { kind: "glossary", source: "Himmel", pt: "Himmel" },
+      "series",
+    )
     const card = compileCard(saved.base, saved.series)
     const other = compileCard(br, { ...series, variant: "pt-br", rules: [] })
     expect(card.rules).toEqual([{ kind: "glossary", source: "Himmel", pt: "Himmel" }])
@@ -17,7 +22,12 @@ describe("style card", () => {
   })
 
   it("compiles an empty profile", () => {
-    const card = compileCard(emptyBase("pt-pt"), { id: "new", variant: "pt-pt", name: "New", rules: [] })
+    const card = compileCard(emptyBase("pt-pt"), {
+      id: "new",
+      variant: "pt-pt",
+      name: "New",
+      rules: [],
+    })
     expect(card.voice).toBe("")
     expect(card.cpsLimit).toBe(17)
   })

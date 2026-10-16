@@ -12,7 +12,9 @@ describe("completeChat", () => {
       } else {
         url = input.url
       }
-      return new Response(JSON.stringify({ lines: [{ id: "0", words: "Olá.", mark: "clean" }] }), { status: 200 })
+      return new Response(JSON.stringify({ lines: [{ id: "0", words: "Olá.", mark: "clean" }] }), {
+        status: 200,
+      })
     }
     const result = await completeChat({
       provider: "mistral",

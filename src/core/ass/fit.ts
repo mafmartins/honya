@@ -1,10 +1,6 @@
 export const DEFAULT_CPS_LIMIT = 17
 
-export function charactersPerSecond(
-  words: string,
-  startMs: number,
-  endMs: number,
-): number {
+export function charactersPerSecond(words: string, startMs: number, endMs: number): number {
   const visible = words.replace(/\\N/g, "").replace(/\\n/g, "")
   const durationMs = endMs - startMs
   if (durationMs === 0) {

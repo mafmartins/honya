@@ -42,6 +42,15 @@ describe("ffmpeg build checks", () => {
     expect(macForeignLibraries(brew)).toEqual(["/opt/homebrew/lib/libdav1d.7.dylib"])
   })
 
+  it("reads every architecture of a universal binary", () => {
+    const universal = `out/mac/ffmpeg (architecture x86_64):
+\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+out/mac/ffmpeg (architecture arm64):
+\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+\t/opt/homebrew/lib/libz.1.dylib (compatibility version 1.0.0, current version 1.3.1)`
+    expect(macForeignLibraries(universal)).toEqual(["/opt/homebrew/lib/libz.1.dylib"])
+  })
+
   it("flags windows dlls that are not part of the system", () => {
     expect(windowsForeignDlls(OBJDUMP_CLEAN)).toEqual([])
     expect(windowsForeignDlls(`${OBJDUMP_CLEAN}\n\tDLL Name: libwinpthread-1.dll`)).toEqual([

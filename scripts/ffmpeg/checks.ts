@@ -31,7 +31,12 @@ export function licenceProblems(buildconf: string): string[] {
 
 export function macForeignLibraries(otool: string): string[] {
   const foreign: string[] = []
-  for (const line of otool.split("\n").slice(1)) {
+  for (const line of otool.split("\n")) {
+    // Header lines name the binary (one per architecture in a universal binary) and
+    // end with a colon; library lines are indented.
+    if (!/^\s/.test(line)) {
+      continue
+    }
     const path = line.trim().split(" (compatibility")[0]?.trim() ?? ""
     if (path === "" || path.startsWith("/usr/lib/") || path.startsWith("/System/")) {
       continue

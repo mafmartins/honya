@@ -3,7 +3,7 @@
 # and dav1d into out/<target>/deps. Targets: mac-arm64 mac-x86_64 win linux.
 set -euo pipefail
 target="$1"
-root="$(cd "$(dirname "$0")/../.." && pwd)"
+root="$(cd "$(dirname "$0")/../.." && pwd -P)"
 pins() { node "$root/scripts/ffmpeg/pins.ts" "$1"; }
 source "$root/scripts/ffmpeg/flags.sh"
 

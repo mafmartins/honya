@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
+import { isMain } from "./main.ts"
 
 export type OsName = "mac" | "win" | "linux"
 
@@ -101,7 +102,7 @@ function field(pins: Pins, name: string): string | null {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMain(process.argv[1], import.meta.url)) {
   const versionFile = fileURLToPath(new URL("../../build/ffmpeg/VERSION", import.meta.url))
   const name = process.argv[2] ?? ""
   const value = field(parsePins(readFileSync(versionFile, "utf8")), name)

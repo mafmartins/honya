@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync }
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assetName, assetUrl, hostOs, parsePins, releaseTag, type OsName } from "./pins.ts"
+import { isMain } from "./main.ts"
 
 export interface FetchDeps {
   fetch: typeof fetch
@@ -114,7 +115,7 @@ const nodeDeps: FetchDeps = {
   },
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMain(process.argv[1], import.meta.url)) {
   const root = fileURLToPath(new URL("../..", import.meta.url))
   const targets: OsName[] = process.argv.includes("--all")
     ? ["mac", "win", "linux"]

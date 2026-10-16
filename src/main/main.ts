@@ -77,6 +77,7 @@ interface StoredSavedRun {
   brief: string
   hardIds: string[]
   frameIds: string[]
+  strongIds: string[]
 }
 
 interface StoredSession {
@@ -453,6 +454,7 @@ function storedSaved(saved: SavedRun): StoredSavedRun {
     brief: saved.brief,
     hardIds: saved.hardIds,
     frameIds: saved.frameIds,
+    strongIds: saved.strongIds,
   }
 }
 
@@ -621,6 +623,7 @@ function readStoredSaved(value: unknown): StoredSavedRun | null {
     brief: value.brief,
     hardIds: value.hardIds,
     frameIds: value.frameIds,
+    strongIds: isStringList(value.strongIds) ? value.strongIds : [],
   }
 }
 

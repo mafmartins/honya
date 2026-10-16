@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { runTranslation, resumeTranslation } from "../../src/core/pipeline/run"
-import type { Completer } from "../../src/core/pipeline/run"
+import {
+  runTranslation,
+  resumeTranslation,
+  totalBatches,
+  type RunEvent,
+} from "../../src/core/pipeline/run"
+import type { Completer, RunInput } from "../../src/core/pipeline/run"
 
 function scriptWith(count: number): string {
   const events = Array.from({ length: count }, (_, i) => {
@@ -9,6 +14,23 @@ function scriptWith(count: number): string {
     return `Dialogue: 0,${start},${end},Default,,0,0,0,,Line ${String(i)}.`
   }).join("\n")
   return `[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n${events}\n`
+}
+
+const echo: Completer = (request) => {
+  const lines = [...request.prompt.matchAll(/^(\d+):/gm)].flatMap((m) =>
+    m[1] === undefined ? [] : [{ id: m[1], words: `pt ${m[1]}`, mark: "clean" as const }],
+  )
+  return Promise.resolve({ lines })
+}
+
+function baseInput(count: number): Omit<RunInput, "complete"> {
+  return {
+    ass: scriptWith(count),
+    dialogueStyles: new Set(["Default"]),
+    card: { variant: "pt-pt", seriesId: "s", revision: 1, cpsLimit: 17, voice: "", rules: [] },
+    preset: "save",
+    sleep: async () => {},
+  }
 }
 
 describe("runTranslation", () => {
@@ -67,5 +89,60 @@ describe("runTranslation", () => {
     })
     expect(second.saved.completedBatches).toBe(3)
     expect(second.ass).toContain("pt 50")
+  })
+
+  it("emits brief, batch and batch-done events in order", async () => {
+    const events: RunEvent[] = []
+    await runTranslation({
+      ...baseInput(60),
+      complete: echo,
+      onEvent: (event) => events.push(event),
+    })
+    const shape = events.map((e) =>
+      e.type === "batch-done"
+        ? `${e.type} ${String(e.index)}/${String(e.total)} ${String(e.lines.length)}`
+        : e.type === "batch"
+          ? `${e.type} ${String(e.index)}/${String(e.total)}`
+          : e.type,
+    )
+    expect(shape).toEqual([
+      "brief",
+      "batch 1/3",
+      "batch-done 1/3 25",
+      "batch 2/3",
+      "batch-done 2/3 25",
+      "batch 3/3",
+      "batch-done 3/3 10",
+    ])
+  })
+
+  it("records lines answered by the strong model", async () => {
+    const events: RunEvent[] = []
+    const complete: Completer = (request) => {
+      if (request.tier === "cheap") {
+        return Promise.resolve({ refused: true })
+      }
+      return echo(request)
+    }
+    const result = await runTranslation({
+      ...baseInput(3),
+      preset: "best",
+      complete,
+      onEvent: (event) => events.push(event),
+    })
+    expect(result.saved.results.size).toBe(3)
+    expect([...result.saved.strongIds].sort()).toEqual([...result.saved.results.keys()].sort())
+    expect(events).toContainEqual({ type: "escalate", count: 3 })
+  })
+
+  it("rejects when the completer throws", async () => {
+    const complete: Completer = () => Promise.reject(new Error("401"))
+    await expect(runTranslation({ ...baseInput(3), complete })).rejects.toThrow("401")
+  })
+
+  it("counts batches like chunkDialogue", () => {
+    expect(totalBatches(0)).toBe(0)
+    expect(totalBatches(25)).toBe(1)
+    expect(totalBatches(26)).toBe(2)
   })
 })

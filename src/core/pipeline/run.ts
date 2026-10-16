@@ -9,6 +9,16 @@ import type { LineResult, LineSignals, Preset } from "./types"
 
 export type { LineResult }
 
+export type RunEvent =
+  | { type: "brief" }
+  | { type: "batch"; index: number; total: number }
+  | { type: "escalate"; count: number }
+  | { type: "batch-done"; index: number; total: number; lines: LineResult[] }
+
+export function totalBatches(lineCount: number): number {
+  return chunkDialogue(new Array<null>(lineCount).fill(null)).length
+}
+
 export interface Completer {
   (request: {
     tier: "cheap" | "strong"
@@ -24,6 +34,7 @@ export interface SavedRun {
   brief: string
   hardIds: string[]
   frameIds: string[]
+  strongIds: string[]
 }
 
 export interface RunInput {
@@ -36,6 +47,7 @@ export interface RunInput {
   stopAfterBatches?: number
   frameSetting?: "none" | "marked" | "every"
   frames?: ReadonlyMap<string, Uint8Array>
+  onEvent?: (event: RunEvent) => void
 }
 
 export interface RunResult {
@@ -61,6 +73,7 @@ type BriefState = {
 
 export async function runTranslation(input: RunInput): Promise<RunResult> {
   const cues = dialogueCues(input)
+  input.onEvent?.({ type: "brief" })
   const brief = await requestBrief(input, cues)
   const saved: SavedRun = {
     completedBatches: 0,
@@ -69,6 +82,7 @@ export async function runTranslation(input: RunInput): Promise<RunResult> {
     brief: brief.text,
     hardIds: brief.hardIds,
     frameIds: brief.frameIds,
+    strongIds: [],
   }
   return continueTranslation(input, saved, cues)
 }
@@ -134,6 +148,7 @@ async function continueTranslation(
   const frameIds = new Set(saved.frameIds)
   let glossary: Glossary = { entries: [...saved.glossary] }
   const results = new Map(saved.results)
+  const strongIds = new Set(saved.strongIds)
   let completed = saved.completedBatches
   let current = saved
 
@@ -145,7 +160,11 @@ async function continueTranslation(
     if (chunk === undefined) {
       break
     }
+    input.onEvent?.({ type: "batch", index: index + 1, total: chunks.length })
     const translated = await translateChunk(input, chunk, glossary, saved.brief, hardIds, frameIds)
+    for (const id of translated.strongIds) {
+      strongIds.add(id)
+    }
     for (const line of translated.lines) {
       results.set(line.id, line)
     }
@@ -158,7 +177,14 @@ async function continueTranslation(
       brief: saved.brief,
       hardIds: saved.hardIds,
       frameIds: saved.frameIds,
+      strongIds: [...strongIds],
     }
+    input.onEvent?.({
+      type: "batch-done",
+      index: index + 1,
+      total: chunks.length,
+      lines: translated.lines,
+    })
   }
 
   return render(input, current)
@@ -171,7 +197,7 @@ async function translateChunk(
   brief: string,
   hardIds: ReadonlySet<string>,
   frameIds: ReadonlySet<string>,
-): Promise<{ lines: LineResult[]; glossary: Glossary }> {
+): Promise<{ lines: LineResult[]; glossary: Glossary; strongIds: string[] }> {
   const setting = input.frameSetting ?? "none"
   const frames = input.frames ?? EMPTY_FRAMES
   const ids = chunk.map((cue) => String(cue.index))
@@ -194,10 +220,15 @@ async function translateChunk(
   const signals = signalsFor(cheapLines, chunk, hardIds, input.card.cpsLimit)
   const selected = new Set(escalationIds(input.preset, signals))
   if (selected.size === 0) {
-    return { lines: settleCheap(chunk, cheapLines, input.card.cpsLimit), glossary: nextGlossary }
+    return {
+      lines: settleCheap(chunk, cheapLines, input.card.cpsLimit),
+      glossary: nextGlossary,
+      strongIds: [],
+    }
   }
 
   const escalated = chunk.filter((cue) => selected.has(String(cue.index)))
+  input.onEvent?.({ type: "escalate", count: escalated.length })
   const strongLines = await requestMatching(
     input,
     batchRequest(
@@ -219,6 +250,7 @@ async function translateChunk(
   return {
     lines: mergePass(chunk, cheapLines, strongLines, selected, input.card.cpsLimit),
     glossary: nextGlossary,
+    strongIds: strongIdsOf(escalated, strongLines),
   }
 }
 
@@ -231,7 +263,7 @@ async function escalateFailedChunk(
   frameIds: ReadonlySet<string>,
   setting: FrameSetting,
   frames: ReadonlyMap<string, Uint8Array>,
-): Promise<{ lines: LineResult[]; glossary: Glossary }> {
+): Promise<{ lines: LineResult[]; glossary: Glossary; strongIds: string[] }> {
   const signals: LineSignals[] = chunk.map((cue) => ({
     id: String(cue.index),
     cheap: "doubt",
@@ -241,9 +273,10 @@ async function escalateFailedChunk(
   const selected = new Set(escalationIds(input.preset, signals))
   const escalated = chunk.filter((cue) => selected.has(String(cue.index)))
   if (escalated.length === 0) {
-    return { lines: chunk.map(englishFailure), glossary }
+    return { lines: chunk.map(englishFailure), glossary, strongIds: [] }
   }
 
+  input.onEvent?.({ type: "escalate", count: escalated.length })
   const strongLines = await requestMatching(
     input,
     batchRequest(
@@ -263,7 +296,18 @@ async function escalateFailedChunk(
   return {
     lines: mergePass(chunk, [], strongLines, selected, input.card.cpsLimit),
     glossary: nextGlossary,
+    strongIds: strongIdsOf(escalated, strongLines),
   }
+}
+
+function strongIdsOf(
+  escalated: readonly DialogueCue[],
+  strongLines: readonly LineResult[] | undefined,
+): string[] {
+  if (strongLines === undefined) {
+    return []
+  }
+  return escalated.map((cue) => String(cue.index))
 }
 
 async function requestMatching(

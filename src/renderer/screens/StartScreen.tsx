@@ -22,14 +22,14 @@ export function StartScreen(props: {
   const api = useApi()
   const act = useAction()
   const report = useReport()
-  const [hasKey, setHasKey] = useState(true)
+  const [hasKey, setHasKey] = useState<{ provider: ProviderId; present: boolean } | null>(null)
 
   useEffect(() => {
     let current = true
     api.hasKey(session.provider).then(
       (present) => {
         if (current) {
-          setHasKey(present)
+          setHasKey({ provider: session.provider, present })
         }
       },
       (error: unknown) => {
@@ -119,14 +119,15 @@ export function StartScreen(props: {
               ))}
             </select>
           </label>
-          {hasKey ? null : (
+          {hasKey !== null && hasKey.provider === session.provider && !hasKey.present ? (
             <KeyField
+              key={session.provider}
               provider={session.provider}
               onSaved={() => {
-                setHasKey(true)
+                setHasKey({ provider: session.provider, present: true })
               }}
             />
-          )}
+          ) : null}
           <label>
             <span>preset</span>
             <select

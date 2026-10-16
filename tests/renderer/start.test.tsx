@@ -116,6 +116,15 @@ describe("start screen", () => {
     expect(await screen.findByLabelText("gpt key")).toBeTruthy()
   })
 
+  it("clears the typed key when the provider changes", async () => {
+    render(<App api={fakeApi()} />)
+    fireEvent.change(await screen.findByLabelText("claude key"), { target: { value: "sk-claude" } })
+    fireEvent.change(screen.getByLabelText("provider"), { target: { value: "gpt" } })
+    const field = await screen.findByLabelText("gpt key")
+    expect(field instanceof HTMLInputElement && field.value).toBe("")
+    expect(screen.queryByLabelText("claude key")).toBeNull()
+  })
+
   it("disables the frame setting until a video is chosen", async () => {
     const api = fakeApi({
       pickVideo: () => Promise.resolve({ path: "/v/ep01.mkv", name: "ep01.mkv" }),

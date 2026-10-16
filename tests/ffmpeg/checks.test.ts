@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  dependencyProblems,
   isPng,
   licenceProblems,
   linuxIsStatic,
@@ -73,5 +74,28 @@ out/mac/ffmpeg (architecture arm64):
   it("recognises png output", () => {
     expect(isPng(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]))).toBe(true)
     expect(isPng(new TextEncoder().encode("<html>"))).toBe(false)
+  })
+
+  it("fails the dependency check when the tool fails or lists nothing", () => {
+    expect(dependencyProblems("mac", OTOOL_CLEAN, 0)).toEqual([])
+    expect(dependencyProblems("mac", "error: can't open file", 1)).toEqual([
+      "dependency tool failed (exit 1)",
+    ])
+    expect(dependencyProblems("mac", "out/mac/ffmpeg:\nerror: truncated", 0)).toEqual([
+      "otool listed no libraries",
+    ])
+    expect(dependencyProblems("win", OBJDUMP_CLEAN, 0)).toEqual([])
+    expect(dependencyProblems("win", "objdump: file format not recognized", 0)).toEqual([
+      "objdump listed no imported DLLs",
+    ])
+    expect(
+      dependencyProblems("win", `${OBJDUMP_CLEAN}\n\tDLL Name: libwinpthread-1.dll`, 0),
+    ).toEqual(["imports libwinpthread-1.dll"])
+    expect(
+      dependencyProblems("linux", "ffmpeg: ELF 64-bit LSB executable, statically linked", 0),
+    ).toEqual([])
+    expect(
+      dependencyProblems("linux", "ffmpeg: ELF 64-bit LSB pie executable, dynamically linked", 0),
+    ).toEqual(["not statically linked"])
   })
 })

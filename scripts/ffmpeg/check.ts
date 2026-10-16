@@ -1,35 +1,33 @@
 import { spawnSync } from "node:child_process"
 import type { OsName } from "./pins.ts"
-import {
-  licenceProblems,
-  linuxIsStatic,
-  macForeignLibraries,
-  windowsForeignDlls,
-} from "./checks.ts"
+import { dependencyProblems, licenceProblems } from "./checks.ts"
 
-function run(command: string, args: string[]): string {
+interface ToolResult {
+  output: string
+  status: number | null
+}
+
+function run(command: string, args: string[]): ToolResult {
   // objdump -p on a static .exe prints several megabytes.
   const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
   if (result.error !== undefined) {
     throw new Error(`Couldn't run ${command}: ${result.error.message}`)
   }
-  return `${result.stdout}${result.stderr}`
+  return { output: `${result.stdout}${result.stderr}`, status: result.status }
 }
 
-function dependencyProblems(os: OsName, binary: string): string[] {
+function dependencyOutput(os: OsName, binary: string): ToolResult {
   if (os === "mac") {
-    return macForeignLibraries(run("otool", ["-L", binary])).map((library) => `links ${library}`)
+    return run("otool", ["-L", binary])
   }
   if (os === "win") {
-    let objdump: string
     try {
-      objdump = run("x86_64-w64-mingw32-objdump", ["-p", binary])
+      return run("x86_64-w64-mingw32-objdump", ["-p", binary])
     } catch {
-      objdump = run("objdump", ["-p", binary])
+      return run("objdump", ["-p", binary])
     }
-    return windowsForeignDlls(objdump).map((dll) => `imports ${dll}`)
   }
-  return linuxIsStatic(run("file", [binary])) ? [] : ["not statically linked"]
+  return run("file", [binary])
 }
 
 function isOs(value: string | undefined): value is OsName {
@@ -47,9 +45,13 @@ if (!isOs(os) || binary === undefined) {
 // configure line recorded next to it instead of running it.
 const buildconf =
   os === "win" && process.platform !== "win32"
-    ? run("cat", [binary.replace(/ffmpeg\.exe$/, "configure-line.txt")])
-    : run(binary, ["-hide_banner", "-buildconf"])
-const problems = [...licenceProblems(buildconf), ...dependencyProblems(os, binary)]
+    ? run("cat", [binary.replace(/ffmpeg\.exe$/, "configure-line.txt")]).output
+    : run(binary, ["-hide_banner", "-buildconf"]).output
+const tool = dependencyOutput(os, binary)
+const problems = [
+  ...licenceProblems(buildconf),
+  ...dependencyProblems(os, tool.output, tool.status),
+]
 for (const problem of problems) {
   process.stdout.write(`${problem}\n`)
 }

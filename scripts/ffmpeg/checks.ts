@@ -1,3 +1,5 @@
+import type { OsName } from "./pins.ts"
+
 const REQUIRED_FLAGS = ["--disable-gpl", "--disable-nonfree"]
 const FORBIDDEN_FLAGS = ["--enable-gpl", "--enable-nonfree", "--enable-version3"]
 const SYSTEM_DLLS = new Set([
@@ -68,4 +70,26 @@ export function linuxIsStatic(fileOutput: string): boolean {
 
 export function isPng(bytes: Uint8Array): boolean {
   return PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)
+}
+
+// Dependency problems from the platform tool's output (otool -L, objdump -p, file) and
+// its exit status. A tool that fails or lists nothing is a problem in itself: every
+// Mach-O links libSystem and every Windows executable imports KERNEL32.
+export function dependencyProblems(os: OsName, output: string, status: number | null): string[] {
+  if (status !== 0) {
+    return [`dependency tool failed (exit ${String(status)})`]
+  }
+  if (os === "mac") {
+    if (!output.split("\n").some((line) => /^\s+\S/.test(line))) {
+      return ["otool listed no libraries"]
+    }
+    return macForeignLibraries(output).map((library) => `links ${library}`)
+  }
+  if (os === "win") {
+    if (!/DLL Name:\s*\S/.test(output)) {
+      return ["objdump listed no imported DLLs"]
+    }
+    return windowsForeignDlls(output).map((dll) => `imports ${dll}`)
+  }
+  return linuxIsStatic(output) ? [] : ["not statically linked"]
 }

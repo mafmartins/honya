@@ -13,10 +13,15 @@ export interface GlossaryRule {
 
 export type Rule = ProseRule | GlossaryRule
 
+export interface ExampleScript {
+  name: string
+  text: string
+}
+
 export interface BaseProfile {
   variant: Variant
   cpsLimit: number
-  examples: string[]
+  examples: ExampleScript[]
   rules: Rule[]
   cardRevision: number
 }

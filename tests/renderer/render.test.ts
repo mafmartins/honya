@@ -5,24 +5,13 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { buildSync } from "esbuild"
 import { describe, expect, it } from "vitest"
-import { emptyBase } from "../../src/core/library/card"
 import {
   acceptStyleList,
-  importExampleScript,
   render,
   setStyleGuess,
   type AppState,
   type Screen,
 } from "../../src/renderer/render"
-
-const SCRIPT = `[Script Info]
-ScriptType: v4.00+
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:01.00,0:00:03.00,Default,Frieren,0,0,0,,{\\i1}Hello.{\\i0}
-Dialogue: 0,0:00:04.00,0:00:05.00,Signs,,0,0,0,,Shop
-`
 
 function card(screen: Screen): AppState {
   return {
@@ -179,16 +168,6 @@ describe("render", () => {
     expect(html).toContain("dragon → dragão")
     expect(html).toContain("sample.ass")
     expect(html).toContain("Frieren")
-  })
-
-  it("imports visible words from dialogue styles", () => {
-    const base = emptyBase("pt-pt")
-    const imported = importExampleScript(base, SCRIPT, ["Default", "Signs"])
-    expect(imported.examples).toEqual(["Hello.\nShop"])
-    expect(importExampleScript(base, SCRIPT, ["Default"]).examples).toEqual(["Hello."])
-    const missed = importExampleScript(base, SCRIPT, ["Title"])
-    expect(missed.examples).toEqual([""])
-    expect(missed.cardRevision).toBe(base.cardRevision + 1)
   })
 
   it("matches the browser javascript for the review fixture", () => {

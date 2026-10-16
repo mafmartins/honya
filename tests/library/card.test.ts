@@ -4,7 +4,7 @@ import { createMemoryStore } from "../../src/core/library/store"
 
 describe("style card", () => {
   it("keeps variants apart and recompiles after a series rule", () => {
-    const pt = importExample(emptyBase("pt-pt"), "Olá.")
+    const pt = importExample(emptyBase("pt-pt"), "ep01.ass", "Olá.")
     const br = emptyBase("pt-br")
     const series = { id: "frieren", variant: "pt-pt" as const, name: "Frieren", rules: [] }
     const saved = saveRule(
@@ -19,6 +19,20 @@ describe("style card", () => {
     expect(other.rules).toEqual([])
     expect(card.voice).toContain("Olá.")
     expect(saved.base.cardRevision).toBe(pt.cardRevision + 1)
+  })
+
+  it("keeps each example's name and joins their text into the voice", () => {
+    const base = importExample(
+      importExample(emptyBase("pt-pt"), "ep01.ass", "Olá."),
+      "ep02.ass",
+      "Adeus.",
+    )
+    expect(base.examples).toEqual([
+      { name: "ep01.ass", text: "Olá." },
+      { name: "ep02.ass", text: "Adeus." },
+    ])
+    const card = compileCard(base, { id: "s", variant: "pt-pt", name: "S", rules: [] })
+    expect(card.voice).toBe("Olá.\nAdeus.")
   })
 
   it("compiles an empty profile", () => {

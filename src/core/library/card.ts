@@ -12,11 +12,11 @@ export function emptyBase(variant: Variant): BaseProfile {
   }
 }
 
-export function importExample(base: BaseProfile, dialogueText: string): BaseProfile {
+export function importExample(base: BaseProfile, name: string, text: string): BaseProfile {
   return {
     variant: base.variant,
     cpsLimit: base.cpsLimit,
-    examples: [...base.examples, dialogueText],
+    examples: [...base.examples, { name, text }],
     rules: base.rules,
     cardRevision: base.cardRevision + 1,
   }
@@ -54,7 +54,7 @@ export function compileCard(base: BaseProfile, series: SeriesProfile): StyleCard
     seriesId: series.id,
     revision: base.cardRevision,
     cpsLimit: base.cpsLimit,
-    voice: base.examples.join("\n"),
+    voice: base.examples.map((example) => example.text).join("\n"),
     rules: [...base.rules, ...series.rules],
   }
 }

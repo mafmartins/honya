@@ -7,3 +7,5 @@ graphify-out/
 .DS_Store
 build/ffmpeg/*
 !build/ffmpeg/README.md
+!build/ffmpeg/VERSION
+out/

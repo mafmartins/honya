@@ -34,7 +34,7 @@ describe("profiles series keys and models", () => {
     expect(await within(series).findByText("Keep honorifics.")).toBeTruthy()
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true)
     fireEvent.click(within(series).getByRole("button", { name: "Delete Sousou no Frieren" }))
-    expect(confirm).toHaveBeenCalledWith("Delete Sousou no Frieren and its 1 rules?")
+    expect(confirm).toHaveBeenCalledWith("Delete Sousou no Frieren and its 1 rule?")
     await waitFor(() => {
       expect(within(series).queryByText("Sousou no Frieren")).toBeNull()
     })
@@ -62,14 +62,55 @@ describe("profiles series keys and models", () => {
     expect(await within(keys).findByText("claude: missing")).toBeTruthy()
   })
 
-  it("saves model ids on blur and resets them", async () => {
+  it("says rules for any count other than one", async () => {
+    const api = fakeApi()
+    await api.createSeries("pt-pt", "Frieren")
+    await openProfiles(api)
+    const series = await screen.findByRole("region", { name: "series" })
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    fireEvent.click(await within(series).findByRole("button", { name: "Delete Frieren" }))
+    expect(confirm).toHaveBeenCalledWith("Delete Frieren and its 0 rules?")
+  })
+
+  it("says so when the variant has no series", async () => {
     await openProfiles(fakeApi())
+    const series = await screen.findByRole("region", { name: "series" })
+    expect(within(series).getByText("No series yet. Create one on the start screen.")).toBeTruthy()
+  })
+
+  it("cancels a rename without saving", async () => {
+    const api = fakeApi()
+    await api.createSeries("pt-pt", "Frieren")
+    await openProfiles(api)
+    const series = await screen.findByRole("region", { name: "series" })
+    fireEvent.click(await within(series).findByRole("button", { name: "Rename Frieren" }))
+    fireEvent.change(within(series).getByLabelText("series name"), { target: { value: "Other" } })
+    fireEvent.click(within(series).getByRole("button", { name: "Cancel" }))
+    expect(within(series).getByRole("button", { name: "Frieren" })).toBeTruthy()
+    expect(within(series).queryByLabelText("series name")).toBeNull()
+  })
+
+  it("cancels a key replacement", async () => {
+    await openProfiles(fakeApi())
+    const keys = await screen.findByRole("region", { name: "provider keys" })
+    fireEvent.click(await within(keys).findByRole("button", { name: "Replace claude key" }))
+    fireEvent.click(within(keys).getByRole("button", { name: "Cancel" }))
+    expect(within(keys).queryByLabelText("claude key")).toBeNull()
+    expect(within(keys).getByRole("button", { name: "Replace claude key" })).toBeTruthy()
+  })
+
+  it("saves model ids on blur and resets them", async () => {
+    const api = fakeApi()
+    await openProfiles(api)
     const models = await screen.findByRole("region", { name: "model ids" })
     const cheap = await within(models).findByLabelText("claude cheap model")
     fireEvent.change(cheap, { target: { value: "claude-small" } })
     fireEvent.blur(cheap)
     await waitFor(() => {
       expect(cheap instanceof HTMLInputElement && cheap.value).toBe("claude-small")
+    })
+    await waitFor(async () => {
+      expect((await api.getModels("claude")).cheap).toBe("claude-small")
     })
     fireEvent.click(within(models).getByRole("button", { name: "Reset claude models" }))
     await waitFor(() => {

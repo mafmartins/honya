@@ -62,6 +62,9 @@ export function SeriesSection({ variant }: { variant: Variant }): React.JSX.Elem
   return (
     <section aria-label="series">
       <p>{`series · ${variant}`}</p>
+      {series.length === 0 ? (
+        <p className="muted">No series yet. Create one on the start screen.</p>
+      ) : null}
       <ul className="series-list">
         {series.map((item) => (
           <li key={item.id}>
@@ -86,6 +89,14 @@ export function SeriesSection({ variant }: { variant: Variant }): React.JSX.Elem
                   }}
                 >
                   Save name
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRenaming(null)
+                  }}
+                >
+                  Cancel
                 </button>
               </span>
             ) : (
@@ -116,9 +127,10 @@ export function SeriesSection({ variant }: { variant: Variant }): React.JSX.Elem
                   type="button"
                   aria-label={`Delete ${item.name}`}
                   onClick={() => {
+                    const rules = item.ruleCount === 1 ? "rule" : "rules"
                     if (
                       !window.confirm(
-                        `Delete ${item.name} and its ${String(item.ruleCount)} rules?`,
+                        `Delete ${item.name} and its ${String(item.ruleCount)} ${rules}?`,
                       )
                     ) {
                       return

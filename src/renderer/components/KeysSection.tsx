@@ -52,13 +52,23 @@ export function KeysSection(): React.JSX.Element {
           <li key={provider}>
             <span>{`${provider}: ${saved.get(provider) === true ? "saved" : "missing"}`}</span>{" "}
             {replacing === provider ? (
-              <KeyField
-                provider={provider}
-                onSaved={() => {
-                  setReplacing(null)
-                  act(refresh)
-                }}
-              />
+              <>
+                <KeyField
+                  provider={provider}
+                  onSaved={() => {
+                    setReplacing(null)
+                    act(refresh)
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplacing(null)
+                  }}
+                >
+                  Cancel
+                </button>
+              </>
             ) : (
               <button
                 type="button"

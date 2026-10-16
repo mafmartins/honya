@@ -27,7 +27,7 @@ case "$target" in
     args+=(--arch=x86_64 --target-os=darwin --enable-cross-compile --cc="clang -arch x86_64" --extra-cflags="-mmacosx-version-min=$MACOS_MIN" --extra-ldflags="-mmacosx-version-min=$MACOS_MIN")
     ;;
   win)
-    args+=(--target-os=mingw32 --arch=x86_64 --cross-prefix=x86_64-w64-mingw32- --extra-cflags="-I$prefix/include" --extra-ldflags="-L$prefix/lib -static")
+    args+=(--target-os=mingw32 --arch=x86_64 --cross-prefix=x86_64-w64-mingw32- --pkg-config=pkg-config --extra-cflags="-I$prefix/include" --extra-ldflags="-L$prefix/lib -static")
     binary="ffmpeg.exe"
     ;;
   linux)

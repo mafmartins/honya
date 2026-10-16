@@ -110,7 +110,11 @@ function boot(): void {
 }
 
 async function openFile(filters: { name: string; extensions: string[] }[]): Promise<string | null> {
-  const result = await dialog.showOpenDialog({ properties: ["openFile"], filters })
+  const options = { properties: ["openFile" as const], filters }
+  const parent = BrowserWindow.getFocusedWindow()
+  const result = await (parent === null
+    ? dialog.showOpenDialog(options)
+    : dialog.showOpenDialog(parent, options))
   if (result.canceled) {
     return null
   }

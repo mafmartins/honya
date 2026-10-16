@@ -160,3 +160,43 @@ input:disabled,
 select:disabled {
   opacity: 0.5;
 }
+
+button {
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #2a2420;
+  transition:
+    transform 60ms ease-out,
+    box-shadow 60ms ease-out;
+}
+
+button:hover:not(:disabled) {
+  background: #f3efe6;
+}
+
+button:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 #2a2420;
+}
+
+button:focus-visible {
+  outline: 2px solid #e36b1e;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+button.link {
+  box-shadow: none;
+}
+
+button.link:hover:not(:disabled) {
+  background: none;
+}
+
+button.link:active:not(:disabled) {
+  transform: none;
+}

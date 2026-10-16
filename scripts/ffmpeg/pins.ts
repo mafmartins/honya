@@ -14,7 +14,19 @@ export interface Pins {
   dav1d: Pin
   zlib: Pin
   build: number
+  // SHA256 of each published release file, recorded after the release exists so the
+  // repository, not the (mutable) release, decides which bytes are accepted.
+  assets?: Record<string, string>
 }
+
+export const RELEASE_FILES: readonly string[] = [
+  "ffmpeg-mac",
+  "ffmpeg-win.exe",
+  "ffmpeg-linux",
+  "COPYING.LGPLv2.1",
+  "COPYING.dav1d",
+  "SOURCES.txt",
+]
 
 const REPO_RELEASES = "https://github.com/mafmartins/honya/releases/download"
 const SHA256 = /^[0-9a-f]{64}$/
@@ -33,12 +45,23 @@ export function parsePins(text: string): Pins {
   if (typeof build !== "number" || !Number.isInteger(build) || build < 1) {
     throw invalid("build must be a positive whole number")
   }
-  return {
+  const pins: Pins = {
     ffmpeg: readPin(parsed, "ffmpeg"),
     dav1d: readPin(parsed, "dav1d"),
     zlib: readPin(parsed, "zlib"),
     build,
   }
+  if (parsed.assets !== undefined) {
+    pins.assets = readAssets(parsed.assets)
+  }
+  return pins
+}
+
+export function withAssets(text: string, assets: Record<string, string>): string {
+  const pins = parsePins(text)
+  const next: Pins = { ...pins, assets }
+  parsePins(JSON.stringify(next))
+  return `${JSON.stringify(next, null, 2)}\n`
 }
 
 export function releaseTag(pins: Pins): string {
@@ -69,6 +92,20 @@ function readPin(record: Record<string, unknown>, name: string): Pin {
     throw invalid(`${name}.sha256 must be 64 lowercase hex characters`)
   }
   return { version: value.version, sha256: value.sha256 }
+}
+
+function readAssets(value: unknown): Record<string, string> {
+  if (!isRecord(value)) {
+    throw invalid("assets must be an object of file name to SHA256")
+  }
+  const assets: Record<string, string> = {}
+  for (const [name, hash] of Object.entries(value)) {
+    if (typeof hash !== "string" || !SHA256.test(hash)) {
+      throw invalid(`assets.${name} must be 64 lowercase hex characters`)
+    }
+    assets[name] = hash
+  }
+  return assets
 }
 
 function invalid(what: string): Error {

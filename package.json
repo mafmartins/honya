@@ -16,6 +16,7 @@
     "format:check": "prettier --check .",
     "start": "node scripts/build.mjs && electron .",
     "fetch:ffmpeg": "node scripts/ffmpeg/fetch.ts",
+    "ffmpeg:pin": "node scripts/ffmpeg/fetch.ts --pin",
     "pack": "node scripts/ffmpeg/fetch.ts && node scripts/build.mjs && electron-builder"
   },
   "dependencies": {

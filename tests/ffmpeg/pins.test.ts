@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest"
-import { assetName, assetUrl, hostOs, parsePins, releaseTag } from "../../scripts/ffmpeg/pins.ts"
+import {
+  assetName,
+  assetUrl,
+  hostOs,
+  parsePins,
+  RELEASE_FILES,
+  releaseTag,
+  withAssets,
+} from "../../scripts/ffmpeg/pins.ts"
 
 const HASH = "a".repeat(64)
 
@@ -46,5 +54,29 @@ describe("ffmpeg pins", () => {
     expect(hostOs("darwin")).toBe("mac")
     expect(hostOs("win32")).toBe("win")
     expect(hostOs("linux")).toBe("linux")
+  })
+
+  it("reads optional pinned asset checksums and rejects bad ones", () => {
+    expect(parsePins(pinsText()).assets).toBeUndefined()
+    const assets = { "ffmpeg-mac": HASH, "COPYING.dav1d": HASH }
+    expect(parsePins(pinsText({ assets })).assets).toEqual(assets)
+    expect(() => parsePins(pinsText({ assets: { "ffmpeg-mac": "nope" } }))).toThrow(
+      /^Invalid build\/ffmpeg\/VERSION/,
+    )
+  })
+
+  it("lists the files a release carries and records their checksums", () => {
+    expect(RELEASE_FILES).toEqual([
+      "ffmpeg-mac",
+      "ffmpeg-win.exe",
+      "ffmpeg-linux",
+      "COPYING.LGPLv2.1",
+      "COPYING.dav1d",
+      "SOURCES.txt",
+    ])
+    const text = withAssets(pinsText(), { "ffmpeg-mac": "b".repeat(64) })
+    expect(parsePins(text).assets).toEqual({ "ffmpeg-mac": "b".repeat(64) })
+    expect(parsePins(text).build).toBe(1)
+    expect(text.endsWith("\n")).toBe(true)
   })
 })

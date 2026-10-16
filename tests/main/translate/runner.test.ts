@@ -126,11 +126,15 @@ describe("createRunner", () => {
     expect(h.events.at(-1)).toEqual({ type: "stopped", sessionId: id })
     const stored = h.deps.sessions.load(id)
     expect(stored?.phase).toBe("stopped")
-    expect(stored?.saved.completedBatches).toBeLessThanOrEqual(1)
+    expect(stored?.saved.completedBatches).toBe(1)
     h.state.onEmit = ignoreEvent
+    const before = h.events.length
     await runner.resume(id)
     await runner.idle()
-    expect(h.events.at(-1)?.type).toBe("finished")
+    const after = h.events.slice(before)
+    const first = after.find((e) => e.type === "batch")
+    expect(first?.type === "batch" ? first.index : 0).toBe(2)
+    expect(after.at(-1)?.type).toBe("finished")
   })
 
   it("stops on a rejected key and retries from the next batch", async () => {
@@ -240,5 +244,39 @@ describe("createRunner", () => {
     expect(h.events).toContainEqual(
       expect.objectContaining({ type: "activity", text: "Rate limited, retrying in 4 s" }),
     )
+  })
+
+  it("checks the key before loading the script or card", async () => {
+    const h = harness()
+    h.state.key = false
+    h.deps.loadCard = () => {
+      throw new Error("That series no longer exists.")
+    }
+    await expect(createRunner(h.deps).start(REQUEST)).rejects.toThrow(
+      "No Claude key saved. Add it on the start screen.",
+    )
+  })
+
+  it("survives listeners that throw", async () => {
+    const h = harness()
+    h.state.onEmit = () => {
+      throw new Error("listener broke")
+    }
+    const runner = createRunner(h.deps)
+    const id = await runner.start(REQUEST)
+    await runner.idle()
+    expect(h.deps.sessions.load(id)?.phase).toBe("review")
+  })
+
+  it("emits finished for a review session after resume returns", async () => {
+    const h = harness()
+    const runner = createRunner(h.deps)
+    const id = await runner.start(REQUEST)
+    await runner.idle()
+    const late: TranslateEvent[] = []
+    await runner.resume(id)
+    h.state.onEmit = (event) => late.push(event)
+    await runner.idle()
+    expect(late).toEqual([{ type: "finished", sessionId: id, openFlags: 0 }])
   })
 })

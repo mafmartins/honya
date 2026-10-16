@@ -106,12 +106,22 @@ export function createRunner(deps: RunnerDeps): Runner {
     }
   }
 
+  const emit = (event: TranslateEvent): void => {
+    try {
+      deps.emit(event)
+    } catch {
+      // a failing listener must not break the run
+    }
+  }
+
   const begin = (session: TranslateSession, resuming: boolean): string => {
     active = session.id
     stopRequested = false
-    work = execute(session, resuming).finally(() => {
-      active = null
-    })
+    work = execute(session, resuming)
+      .catch(() => undefined)
+      .finally(() => {
+        active = null
+      })
     return session.id
   }
 
@@ -127,12 +137,12 @@ export function createRunner(deps: RunnerDeps): Runner {
       } catch {
         // the failure is still reported below
       }
-      deps.emit({ type: "failed", sessionId: session.id, message })
+      emit({ type: "failed", sessionId: session.id, message })
     }
   }
 
   const activity = (session: TranslateSession, text: string): void => {
-    deps.emit({ type: "activity", sessionId: session.id, text })
+    emit({ type: "activity", sessionId: session.id, text })
   }
 
   const runSession = async (session: TranslateSession, resuming: boolean): Promise<void> => {
@@ -205,7 +215,7 @@ export function createRunner(deps: RunnerDeps): Runner {
 
       const done = takeBatch()
       if (done !== null) {
-        deps.emit({
+        emit({
           type: "batch",
           sessionId: session.id,
           index: done.index,
@@ -225,7 +235,7 @@ export function createRunner(deps: RunnerDeps): Runner {
       if (stopRequested) {
         session.phase = "stopped"
         deps.sessions.save(session)
-        deps.emit({ type: "stopped", sessionId: session.id })
+        emit({ type: "stopped", sessionId: session.id })
         return
       }
     }
@@ -233,7 +243,7 @@ export function createRunner(deps: RunnerDeps): Runner {
     session.phase = "review"
     session.error = null
     deps.sessions.save(session)
-    deps.emit({
+    emit({
       type: "finished",
       sessionId: session.id,
       openFlags: session.saved.results.filter(([, line]) => NOTE.test(line.words)).length,
@@ -275,9 +285,9 @@ export function createRunner(deps: RunnerDeps): Runner {
     if (active !== null) {
       throw new Error("A translation is already running.")
     }
+    requireKey(request.provider)
     const scriptText = deps.readScript(request.scriptPath)
     const { card, seriesName } = deps.loadCard(request.variant, request.seriesId)
-    requireKey(request.provider)
     const styles = new Set(request.dialogueStyles)
     const dialogueLines = readAss(scriptText).filter((cue) => styles.has(cue.style)).length
     if (dialogueLines === 0) {
@@ -338,10 +348,14 @@ export function createRunner(deps: RunnerDeps): Runner {
       throw new Error(`${session.scriptName} changed since this translation started.`)
     }
     if (session.phase === "review") {
-      deps.emit({
-        type: "finished",
-        sessionId: id,
-        openFlags: session.saved.results.filter(([, line]) => NOTE.test(line.words)).length,
+      const openFlags = session.saved.results.filter(([, line]) => NOTE.test(line.words)).length
+      active = id
+      work = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          emit({ type: "finished", sessionId: id, openFlags })
+          active = null
+          resolve()
+        }, 0)
       })
       return id
     }
@@ -367,7 +381,7 @@ export function createRunner(deps: RunnerDeps): Runner {
         return
       }
       stopRequested = true
-      deps.emit({ type: "activity", sessionId: active, text: "Stopping after this batch…" })
+      emit({ type: "activity", sessionId: active, text: "Stopping after this batch…" })
     },
 
     activeId() {

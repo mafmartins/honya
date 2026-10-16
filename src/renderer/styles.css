@@ -17,8 +17,13 @@ body {
   line-height: 1.45;
 }
 
+#app {
+  width: 100%;
+}
+
 .card {
   width: min(880px, 100%);
+  margin: 0 auto;
   box-sizing: border-box;
   padding: 28px 32px 32px;
   background: #faf7f2;
@@ -71,6 +76,7 @@ body {
 
 label {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   margin: 0 0 14px;
 }
@@ -124,6 +130,7 @@ p {
 
 .picked {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
 }
@@ -154,6 +161,7 @@ p {
 
 .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   margin: 0 0 14px;
 }

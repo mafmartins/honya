@@ -8,7 +8,8 @@ import {
 } from "./checks.ts"
 
 function run(command: string, args: string[]): string {
-  const result = spawnSync(command, args, { encoding: "utf8" })
+  // objdump -p on a static .exe prints several megabytes.
+  const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
   if (result.error !== undefined) {
     throw new Error(`Couldn't run ${command}: ${result.error.message}`)
   }

@@ -96,7 +96,7 @@ describe("completeChat", () => {
       prompt: "0: Hello.",
       fetch: fetchImpl,
     })
-    expect(result).toEqual({ refused: true })
+    expect(result).toMatchObject({ refused: true, reason: "the reply is not JSON" })
   })
 
   it("completeText returns the assistant text without the lines instruction", async () => {
@@ -235,6 +235,56 @@ describe("request timeout", () => {
     ).rejects.toMatchObject({
       kind: "server",
       message: "Gemini didn't answer within 3 minutes.",
+    })
+  })
+})
+
+describe("unusable replies", () => {
+  async function replyFor(body: unknown): Promise<unknown> {
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(new Response(typeof body === "string" ? body : JSON.stringify(body)))
+    return completeChat({
+      provider: "gemini",
+      model: defaultModels("gemini").cheap,
+      apiKey: "secret",
+      prompt: "0: Hello.",
+      fetch: fetchImpl,
+    })
+  }
+
+  function gemini(text: string, extra: Record<string, unknown> = {}): unknown {
+    return { candidates: [{ content: { parts: [{ text }] }, ...extra }] }
+  }
+
+  it("names the line that broke the reply", async () => {
+    const lines = JSON.stringify({
+      lines: [
+        { id: "0", words: "Olá.", mark: "clean" },
+        { id: "1", words: "Como?", mark: "hard_call" },
+      ],
+    })
+    expect(await replyFor(gemini(lines))).toMatchObject({
+      refused: true,
+      reason: 'line 2 is not valid: {"id":"1","words":"Como?","mark":"hard_call"}',
+    })
+  })
+
+  it("reports a blocked or cut-off gemini reply", async () => {
+    expect(await replyFor({ candidates: [{ finishReason: "SAFETY" }] })).toMatchObject({
+      refused: true,
+      reason: "the reply has no text (finish reason SAFETY)",
+    })
+    expect(await replyFor({ promptFeedback: { blockReason: "OTHER" } })).toMatchObject({
+      refused: true,
+      reason: "the reply has no text (blocked: OTHER)",
+    })
+  })
+
+  it("reports text that isn't the requested json", async () => {
+    expect(await replyFor(gemini("Sorry, I can't help with that."))).toMatchObject({
+      refused: true,
+      reason: "the reply text is not the requested JSON",
+      excerpt: "Sorry, I can't help with that.",
     })
   })
 })

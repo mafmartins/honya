@@ -15,7 +15,10 @@ export interface ChatInput {
 
 const REQUEST_TIMEOUT_MS = 3 * 60 * 1000
 
-type ChatReply = { lines: LineResult[] } | { refused: true }
+// An unusable reply says why, so the cause can be logged; `excerpt` is the start of
+// the reply text when there was some.
+export type Unusable = { refused: true; reason: string; excerpt?: string }
+type ChatReply = { lines: LineResult[] } | Unusable
 type ChatImage = { id: string; png: Uint8Array }
 type HeaderMap = Record<string, string>
 
@@ -333,24 +336,47 @@ function pngDataUrl(png: Uint8Array): string {
 function readChatBody(text: string): ChatReply {
   const parsed = parseJson(text)
   if (parsed === undefined) {
-    return { refused: true }
+    return unusable("the reply is not JSON", text)
   }
-  const direct = readLines(parsed)
-  if (direct !== undefined) {
+  const direct = readLinesOrReason(parsed)
+  if (Array.isArray(direct)) {
     return { lines: direct }
   }
   if (!isRecord(parsed)) {
-    return { refused: true }
+    return unusable("the reply is not an object", text)
   }
   const assistant = assistantText(parsed)
   if (assistant === undefined) {
-    return { refused: true }
+    return unusable(`the reply has no text${noTextDetail(parsed)}`, text)
   }
-  const nested = readLines(jsonFromAssistant(assistant))
-  if (nested === undefined) {
-    return { refused: true }
+  const json = jsonFromAssistant(assistant)
+  if (json === undefined) {
+    return unusable("the reply text is not the requested JSON", assistant)
   }
-  return { lines: nested }
+  const nested = readLinesOrReason(json)
+  if (Array.isArray(nested)) {
+    return { lines: nested }
+  }
+  return unusable(nested, assistant)
+}
+
+function unusable(reason: string, excerpt: string): Unusable {
+  return { refused: true, reason, excerpt: excerpt.slice(0, 2000) }
+}
+
+// Gemini explains an empty reply with a finish reason (SAFETY, MAX_TOKENS, ...) or a
+// prompt block reason.
+function noTextDetail(body: Record<string, unknown>): string {
+  const feedback = body.promptFeedback
+  if (isRecord(feedback) && typeof feedback.blockReason === "string") {
+    return ` (blocked: ${feedback.blockReason})`
+  }
+  const candidates = body.candidates
+  const first: unknown = isUnknownArray(candidates) ? candidates[0] : undefined
+  if (isRecord(first) && typeof first.finishReason === "string") {
+    return ` (finish reason ${first.finishReason})`
+  }
+  return ""
 }
 
 function assistantText(body: Record<string, unknown>): string | undefined {
@@ -465,15 +491,15 @@ function relaxLineBreaks(text: string): string {
   return text.replace(/(?<!\\)\\N/g, "\\\\N")
 }
 
-function readLines(value: unknown): LineResult[] | undefined {
+function readLinesOrReason(value: unknown): LineResult[] | string {
   if (!isRecord(value) || !isUnknownArray(value.lines)) {
-    return undefined
+    return "the reply has no lines list"
   }
   const lines: LineResult[] = []
-  for (const item of value.lines) {
+  for (const [index, item] of value.lines.entries()) {
     const line = readLine(item)
     if (line === undefined) {
-      return undefined
+      return `line ${String(index + 1)} is not valid: ${JSON.stringify(item)}`
     }
     lines.push(line)
   }

@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, safeStorage } from "electron"
+import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { readAss, type DialogueCue } from "../core/ass/script"
+import { createFileStore } from "../core/library/fileStore"
 import { grabFrame } from "../core/frames/grab"
 import { bundledFfmpegPath } from "../core/frames/path"
 import type { Rule, StyleCard } from "../core/library/types"
@@ -23,8 +24,10 @@ import {
 } from "../core/pipeline/run"
 import type { LineResult, Preset, ProviderId, Variant } from "../core/pipeline/types"
 import { completeChat, type ChatInput } from "../core/providers/complete"
-import { defaultModels } from "../core/providers/models"
 import { canExport, openFlags, type DraftLine, type Flag } from "../core/review/review"
+import { createProfileHandlers } from "./ipc/profiles"
+import { registerSetupIpc } from "./ipc/register"
+import { createModelStore, type ModelStore } from "./modelStore"
 import { createSecretStore, type SecretStore } from "./secrets"
 
 export interface PreflightRequest {
@@ -94,7 +97,10 @@ const NOTE = /\{note: ([^}]*)\}/
 
 function boot(): void {
   const secrets = createSecretStore(safeStorage, { read: readKeyFile, write: writeKeyFile })
-  registerIpc(secrets)
+  const models = createModelStore({ read: readModelFile, write: writeModelFile })
+  const store = createFileStore(join(app.getPath("userData"), "profiles"))
+  registerSetupIpc({ open: openFile, secrets, models, profiles: createProfileHandlers(store) })
+  registerIpc(secrets, models)
   openWindow()
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -103,30 +109,30 @@ function boot(): void {
   })
 }
 
-function registerIpc(secrets: SecretStore): void {
-  onInvoke("honya:has-key", (args) => {
-    const provider = argument(args, 0)
-    if (!isProviderId(provider)) {
-      return false
-    }
-    return secrets.hasKey(provider)
-  })
-  onInvoke("honya:set-key", (args) => {
-    const provider = argument(args, 0)
-    const key = argument(args, 1)
-    if (!isProviderId(provider) || typeof key !== "string") {
-      throw new Error("invalid key")
-    }
-    secrets.setKey(provider, key)
+async function openFile(filters: { name: string; extensions: string[] }[]): Promise<string | null> {
+  const result = await dialog.showOpenDialog({ properties: ["openFile"], filters })
+  if (result.canceled) {
     return null
-  })
-  onInvoke("honya:get-models", (args) => {
-    const provider = argument(args, 0)
-    if (!isProviderId(provider)) {
-      throw new Error("invalid provider")
-    }
-    return defaultModels(provider)
-  })
+  }
+  return result.filePaths[0] ?? null
+}
+
+function modelPath(): string {
+  return join(app.getPath("userData"), "models.json")
+}
+
+function readModelFile(): string | null {
+  const file = modelPath()
+  return existsSync(file) ? readFileSync(file, "utf8") : null
+}
+
+function writeModelFile(text: string): void {
+  const file = modelPath()
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, text, "utf8")
+}
+
+function registerIpc(secrets: SecretStore, models: ModelStore): void {
   onInvoke("honya:preflight", (args) => {
     const request = readPreflightRequest(argument(args, 0))
     if (request === null) {
@@ -139,7 +145,7 @@ function registerIpc(secrets: SecretStore): void {
     if (request === null) {
       throw new Error("invalid start")
     }
-    return startTranslation(secrets, request)
+    return startTranslation(secrets, models, request)
   })
   onInvoke("honya:export", (args) => {
     const request = readExportRequest(argument(args, 0))
@@ -218,6 +224,7 @@ function runPreflight(secrets: SecretStore, request: PreflightRequest): Prefligh
 
 async function startTranslation(
   secrets: SecretStore,
+  models: ModelStore,
   request: StartRequest,
 ): Promise<StartResponse> {
   const dialogueStyles = new Set(request.dialogueStyles)
@@ -242,7 +249,7 @@ async function startTranslation(
 
   const outputPath = request.outputPath ?? gate.summary.outputPath
   const grabbed = await grabFrames(cues, request.videoPath, request.frameSetting)
-  const base = translationInput(request, dialogueStyles, grabbed.frames, secrets)
+  const base = translationInput(request, dialogueStyles, grabbed.frames, secrets, models)
   const sessionId = randomUUID()
   let previous = 0
   let saved: SavedRun | null = null
@@ -298,13 +305,14 @@ function translationInput(
   dialogueStyles: ReadonlySet<string>,
   frames: ReadonlyMap<string, Uint8Array>,
   secrets: SecretStore,
+  models: ModelStore,
 ): RunInput {
   const input: RunInput = {
     ass: request.ass,
     dialogueStyles,
     card: request.card,
     preset: request.preset,
-    complete: (chat) => completeWithProvider(secrets, request.provider, chat),
+    complete: (chat) => completeWithProvider(secrets, models, request.provider, chat),
     sleep,
   }
   if (request.frameSetting !== "none") {
@@ -318,6 +326,7 @@ function translationInput(
 
 async function completeWithProvider(
   secrets: SecretStore,
+  models: ModelStore,
   provider: ProviderId,
   request: Parameters<Completer>[0],
 ): Promise<{ lines: LineResult[] } | { refused: true }> {
@@ -325,10 +334,10 @@ async function completeWithProvider(
   if (apiKey === null) {
     return { refused: true }
   }
-  const models = defaultModels(provider)
+  const pair = models.get(provider)
   const chat: ChatInput = {
     provider,
-    model: request.tier === "cheap" ? models.cheap : models.strong,
+    model: request.tier === "cheap" ? pair.cheap : pair.strong,
     apiKey,
     prompt: request.prompt,
     fetch,

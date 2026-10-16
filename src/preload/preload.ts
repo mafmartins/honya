@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron"
 import type { PreflightResult } from "../core/pipeline/preflight"
+import { readBaseProfile } from "../core/library/guards"
 import type { ProviderId } from "../core/pipeline/types"
 import type { Flag } from "../core/review/review"
 import type {
@@ -9,31 +10,49 @@ import type {
   StartRequest,
   StartResponse,
 } from "../main/main"
+import type { SetupApi } from "../shared/api"
+import {
+  ipcMessage,
+  readBoolean,
+  readLoadedBase,
+  readModelPair,
+  readNothing,
+  readPickedExample,
+  readPickedScript,
+  readPickedVideo,
+  readRules,
+  readSeriesList,
+  readSeriesSummary,
+} from "./readers"
 
-interface ModelPair {
-  cheap: string
-  strong: string
-}
-
-interface HonyaApi {
-  hasKey(provider: ProviderId): Promise<boolean>
-  setKey(provider: ProviderId, key: string): Promise<void>
-  getModels(provider: ProviderId): Promise<ModelPair>
+interface HonyaApi extends SetupApi {
   preflight(input: PreflightRequest): Promise<PreflightResult>
   start(input: StartRequest): Promise<StartResponse>
   export(input: ExportRequest): Promise<ExportResponse>
 }
 
 const honya: HonyaApi = {
-  hasKey(provider) {
-    return read("honya:has-key", [provider], readBoolean)
-  },
-  setKey(provider, key) {
-    return invoke("honya:set-key", [provider, key]).then(() => undefined)
-  },
-  getModels(provider) {
-    return read("honya:get-models", [provider], readModelPair)
-  },
+  pickScript: () => picked("honya:pick-script", [], readPickedScript),
+  pickVideo: () => picked("honya:pick-video", [], readPickedVideo),
+  pickExample: () => picked("honya:pick-example", [], readPickedExample),
+  hasKey: (provider) => read("honya:has-key", [provider], readBoolean),
+  setKey: (provider, key) => read("honya:set-key", [provider, key], readNothing),
+  removeKey: (provider) => read("honya:remove-key", [provider], readNothing),
+  getModels: (provider) => read("honya:get-models", [provider], readModelPair),
+  setModels: (provider, pair) => read("honya:set-models", [provider, pair], readModelPair),
+  resetModels: (provider) => read("honya:reset-models", [provider], readModelPair),
+  listSeries: (variant) => read("honya:list-series", [variant], readSeriesList),
+  createSeries: (variant, name) => read("honya:create-series", [variant, name], readSeriesSummary),
+  renameSeries: (variant, id, name) =>
+    read("honya:rename-series", [variant, id, name], readSeriesSummary),
+  deleteSeries: (variant, id) => read("honya:delete-series", [variant, id], readNothing),
+  loadSeriesRules: (variant, id) => read("honya:load-series-rules", [variant, id], readRules),
+  saveSeriesRules: (variant, id, rules) =>
+    read("honya:save-series-rules", [variant, id, rules], readNothing),
+  loadBase: (variant) => read("honya:load-base", [variant], readLoadedBase),
+  saveBase: (base) => read("honya:save-base", [base], readBaseProfile),
+  importExample: (variant, name, text, styles) =>
+    read("honya:import-example", [variant, name, text, styles], readBaseProfile),
   preflight(input) {
     return read("honya:preflight", [input], readPreflightResult)
   },
@@ -60,7 +79,7 @@ function invoke(channel: string, args: readonly unknown[]): Promise<unknown> {
         resolve(value)
       },
       (reason: unknown) => {
-        reject(toError(reason))
+        reject(new Error(ipcMessage(reason)))
       },
     )
   })
@@ -79,15 +98,13 @@ async function read<T>(
   return parsed
 }
 
-function readBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null
-}
-
-function readModelPair(value: unknown): ModelPair | null {
-  if (!isRecord(value) || typeof value.cheap !== "string" || typeof value.strong !== "string") {
-    return null
-  }
-  return { cheap: value.cheap, strong: value.strong }
+async function picked<T>(
+  channel: string,
+  args: readonly unknown[],
+  parse: (value: unknown) => { value: T | null } | null,
+): Promise<T | null> {
+  const result = await read(channel, args, parse)
+  return result.value
 }
 
 function readPreflightResult(value: unknown): PreflightResult | null {
@@ -210,11 +227,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isUnknownArray(value: unknown): value is readonly unknown[] {
   return Array.isArray(value)
-}
-
-function toError(reason: unknown): Error {
-  if (reason instanceof Error) {
-    return reason
-  }
-  return new Error("ipc failed")
 }

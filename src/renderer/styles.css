@@ -214,3 +214,42 @@ button.link:hover:not(:disabled) {
 button.link:active:not(:disabled) {
   transform: none;
 }
+
+.live-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0 0 16px;
+  border: 1.5px dashed #2a2420;
+}
+
+ul.live {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.live li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+}
+
+.live li + li {
+  border-top: 1px dashed #2a2420;
+}
+
+.live .english {
+  opacity: 0.6;
+}
+
+.live .note,
+.live li.noted .note {
+  color: #e36b1e;
+}
+
+progress {
+  width: 100%;
+  accent-color: #e36b1e;
+}

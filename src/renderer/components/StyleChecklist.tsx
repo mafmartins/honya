@@ -7,6 +7,7 @@ export function StyleChecklist(props: {
   styles: ListedStyle[]
   onConfirm: (dialogueStyles: string[]) => void
   onCancel: () => void
+  confirmLabel?: string
 }): React.JSX.Element {
   const [choices, setChoices] = useState<Map<string, Choice>>(
     () =>
@@ -51,7 +52,7 @@ export function StyleChecklist(props: {
           )
         }}
       >
-        Import
+        {props.confirmLabel ?? "Import"}
       </button>
       <button type="button" onClick={props.onCancel}>
         Cancel

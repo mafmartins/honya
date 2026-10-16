@@ -16,8 +16,9 @@ else
   actual="$(shasum -a 256 "$file" | cut -d' ' -f1)"
 fi
 if [ "$actual" != "$expected" ]; then
-  rm -f "$file"
   echo "Checksum mismatch for $url: expected $expected, got $actual" >&2
+  echo "Received $(wc -c < "$file") bytes: $(file -b "$file" 2>/dev/null || echo unknown type)" >&2
+  rm -f "$file"
   exit 1
 fi
 echo "$file"

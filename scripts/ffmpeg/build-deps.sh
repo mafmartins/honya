@@ -15,7 +15,7 @@ mkdir -p "$work" "$prefix"
 
 zlib_version="$(pins zlib.version)"
 dav1d_version="$(pins dav1d.version)"
-zlib_tar="$("$root/scripts/ffmpeg/fetch-source.sh" "https://zlib.net/zlib-$zlib_version.tar.gz" "$(pins zlib.sha256)" "$sources")"
+zlib_tar="$("$root/scripts/ffmpeg/fetch-source.sh" "https://github.com/madler/zlib/releases/download/v$zlib_version/zlib-$zlib_version.tar.gz" "$(pins zlib.sha256)" "$sources")"
 dav1d_tar="$("$root/scripts/ffmpeg/fetch-source.sh" "https://downloads.videolan.org/pub/videolan/dav1d/$dav1d_version/dav1d-$dav1d_version.tar.xz" "$(pins dav1d.sha256)" "$sources")"
 
 if [ "$target" = "win" ] || [ "$target" = "linux" ]; then

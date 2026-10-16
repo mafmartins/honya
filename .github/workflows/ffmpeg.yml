@@ -185,7 +185,7 @@ jobs:
             echo "Sources:"
             echo "- ffmpeg $version: https://ffmpeg.org/releases/ffmpeg-$version.tar.xz sha256 $(node scripts/ffmpeg/pins.ts ffmpeg.sha256) (attached)"
             echo "- dav1d $(node scripts/ffmpeg/pins.ts dav1d.version): https://downloads.videolan.org/pub/videolan/dav1d/ sha256 $(node scripts/ffmpeg/pins.ts dav1d.sha256)"
-            echo "- zlib $(node scripts/ffmpeg/pins.ts zlib.version): https://zlib.net/ sha256 $(node scripts/ffmpeg/pins.ts zlib.sha256) (Windows and Linux; macOS uses the system zlib)"
+            echo "- zlib $(node scripts/ffmpeg/pins.ts zlib.version): https://github.com/madler/zlib/releases/download/v$(node scripts/ffmpeg/pins.ts zlib.version)/zlib-$(node scripts/ffmpeg/pins.ts zlib.version).tar.gz sha256 $(node scripts/ffmpeg/pins.ts zlib.sha256) (Windows and Linux; macOS uses the system zlib)"
             echo
             echo "Configure lines:"
             echo "- macOS arm64: $(cat artifacts/ffmpeg-mac/configure-line-arm64.txt)"

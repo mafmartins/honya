@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { Proposal, ReviewLine, ReviewView } from "../../shared/api"
 import { useAction } from "../action"
 import { useApi } from "../api"
@@ -33,29 +33,55 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
   const [checking, setChecking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  const [offer, setOffer] = useState<{ words: string; proposal: Proposal } | null>(null)
+  const [offer, setOffer] = useState<{
+    eventIndex: number
+    words: string
+    proposal: Proposal
+  } | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const loaded = useRef(false)
+
+  const load = useCallback((): void => {
+    act(async () => {
+      try {
+        const first = await api.loadReview(sessionId)
+        if (first.openFlags === 0) {
+          onFinish()
+          return
+        }
+        const start = nextOpen(first.lines, -1) ?? 0
+        setPosition(start)
+        setWords(first.lines[start]?.words ?? "")
+        setView(first)
+      } catch (error) {
+        setLoadFailed(true)
+        throw error
+      }
+    })
+  }, [api, act, sessionId, onFinish])
 
   useEffect(() => {
     if (loaded.current) {
       return
     }
     loaded.current = true
-    act(async () => {
-      const first = await api.loadReview(sessionId)
-      if (first.openFlags === 0) {
-        onFinish()
-        return
-      }
-      const start = nextOpen(first.lines, -1) ?? 0
-      setPosition(start)
-      setWords(first.lines[start]?.words ?? "")
-      setView(first)
-    })
-  }, [api, act, sessionId, onFinish])
+    load()
+  }, [load])
 
   if (view === null) {
-    return <p>Loading review…</p>
+    return loadFailed ? (
+      <button
+        type="button"
+        onClick={() => {
+          setLoadFailed(false)
+          load()
+        }}
+      >
+        Try again
+      </button>
+    ) : (
+      <p>Loading review…</p>
+    )
   }
   const current = view.lines[position]
   if (current === undefined) {
@@ -71,14 +97,15 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
       setOffer(null)
     }
   }
-  const adopt = (next: ReviewView, stay: boolean): void => {
+  const adopt = (next: ReviewView, eventIndex: number, stay: boolean): void => {
     setView(next)
     setBusy(false)
     setChecking(false)
     setOffer(null)
     if (!stay) {
-      const target = nextOpen(next.lines, position)
-      const index = target ?? position
+      const here = next.lines.findIndex((entry) => entry.eventIndex === eventIndex)
+      const from = here < 0 ? position : here
+      const index = nextOpen(next.lines, from) ?? from
       setPosition(index)
       setWords(next.lines[index]?.words ?? "")
     }
@@ -100,7 +127,7 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
     const eventIndex = current.eventIndex
     if (!edited) {
       run(async () => {
-        adopt(await api.acceptLine(sessionId, eventIndex, null), false)
+        adopt(await api.acceptLine(sessionId, eventIndex, null), eventIndex, false)
       })
       return
     }
@@ -110,11 +137,11 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
       if (result.status === "proposal") {
         setBusy(false)
         setChecking(false)
-        setOffer({ words, proposal: result.proposal })
+        setOffer({ eventIndex, words, proposal: result.proposal })
       } else if (result.status === "none") {
-        adopt(await api.acceptLine(sessionId, eventIndex, words), false)
+        adopt(await api.acceptLine(sessionId, eventIndex, words), eventIndex, false)
       } else {
-        adopt(await api.acceptLine(sessionId, eventIndex, words), true)
+        adopt(await api.acceptLine(sessionId, eventIndex, words), eventIndex, true)
         setFailed(true)
       }
     })
@@ -128,7 +155,7 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
         setBusy(false)
         setChecking(false)
         setFailed(false)
-        setOffer({ words, proposal: result.proposal })
+        setOffer({ eventIndex, words, proposal: result.proposal })
       } else if (result.status === "none") {
         setBusy(false)
         setChecking(false)
@@ -193,12 +220,13 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
                   adopt(
                     await api.confirmEdit(
                       sessionId,
-                      current.eventIndex,
+                      chosen.eventIndex,
                       chosen.words,
                       chosen.proposal,
                       applyOthers,
                       ruleTarget,
                     ),
+                    chosen.eventIndex,
                     false,
                   )
                 })
@@ -210,6 +238,7 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
       <div className="review-nav">
         <button
           type="button"
+          disabled={busy}
           onClick={() => {
             open(previousOpen(view.lines, position))
           }}
@@ -218,6 +247,7 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
         </button>
         <button
           type="button"
+          disabled={busy}
           onClick={() => {
             open(nextOpen(view.lines, position))
           }}
@@ -234,6 +264,7 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
             <li key={line.eventIndex}>
               <button
                 type="button"
+                disabled={busy}
                 className={`link${line.flagged ? " flagged" : ""}${index === position ? " here" : ""}`}
                 onClick={() => {
                   open(index)

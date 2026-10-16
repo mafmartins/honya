@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ApiContext } from "../../src/renderer/api"
 import { ReviewPanel } from "../../src/renderer/translate/ReviewPanel"
-import type { HonyaApi, ReviewLine, ReviewView } from "../../src/shared/api"
+import type { CheckResult, HonyaApi, ReviewLine, ReviewView } from "../../src/shared/api"
 import { fakeApi } from "./fakeApi"
 
 afterEach(() => {
@@ -186,5 +186,76 @@ describe("review panel", () => {
     await waitFor(() => {
       expect(acceptLine).toHaveBeenCalledWith("session-1", 3, "Edited 3")
     })
+  })
+
+  it("keeps a late proposal on the line that was checked", async () => {
+    let release: (value: CheckResult) => void = () => undefined
+    const checkEdit = vi.fn(
+      () =>
+        new Promise<CheckResult>((resolve) => {
+          release = resolve
+        }),
+    )
+    const proposal = { siblings: [], rule: null }
+    const confirmEdit = vi.fn(() => Promise.resolve(ONE_LEFT))
+    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), checkEdit, confirmEdit }))
+    fireEvent.change(await screen.findByLabelText("translation"), { target: { value: "Changed" } })
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }))
+    await screen.findByText("Checking whether this is a lasting change…")
+    const next = screen.getByRole("button", { name: "Next flag" })
+    expect(next.hasAttribute("disabled")).toBe(true)
+    fireEvent.click(next)
+    release({ status: "proposal", proposal })
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }))
+    await waitFor(() => {
+      expect(confirmEdit).toHaveBeenCalledWith("session-1", 2, "Changed", proposal, false, null)
+    })
+  })
+
+  it("offers Try again when the review fails to load", async () => {
+    const loadReview = vi
+      .fn<HonyaApi["loadReview"]>()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValue(TWO_FLAGS)
+    mount(fakeApi({ loadReview }))
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }))
+    await screen.findByText("Frieren · subs.ass · 2 flags")
+    expect(loadReview).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not accept or confirm anything on Cancel", async () => {
+    const acceptLine = vi.fn(() => Promise.resolve(ONE_LEFT))
+    const confirmEdit = vi.fn(() => Promise.resolve(ONE_LEFT))
+    mount(
+      fakeApi({
+        loadReview: () => Promise.resolve(TWO_FLAGS),
+        checkEdit: () =>
+          Promise.resolve({ status: "proposal", proposal: { siblings: [], rule: null } }),
+        acceptLine,
+        confirmEdit,
+      }),
+    )
+    fireEvent.change(await screen.findByLabelText("translation"), { target: { value: "Changed" } })
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }))
+    await screen.findByLabelText("translation")
+    expect(acceptLine).not.toHaveBeenCalled()
+    expect(confirmEdit).not.toHaveBeenCalled()
+  })
+
+  it("clears the note when Retry check finds no lasting change", async () => {
+    const checkEdit = vi
+      .fn<HonyaApi["checkEdit"]>()
+      .mockResolvedValueOnce({ status: "failed" })
+      .mockResolvedValue({ status: "none" })
+    const acceptLine = vi.fn(() => Promise.resolve(ONE_LEFT))
+    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), checkEdit, acceptLine }))
+    fireEvent.change(await screen.findByLabelText("translation"), { target: { value: "Changed" } })
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Retry check" }))
+    await waitFor(() => {
+      expect(screen.queryByText(/The check couldn't run/)).toBeNull()
+    })
+    expect(acceptLine).toHaveBeenCalledWith("session-1", 2, "Changed")
   })
 })

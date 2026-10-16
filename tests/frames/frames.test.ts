@@ -30,6 +30,7 @@ describe("frames", () => {
     })
     expect(args).toContain("2")
     expect(args).toContain("/tmp/show.mkv")
+    expect(args.join(" ")).toContain("-vf scale='min(640,iw)':-2")
     expect(image).toEqual(png)
   })
 })

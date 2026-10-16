@@ -15,6 +15,10 @@ export async function grabFrame(input: GrabInput): Promise<Uint8Array> {
     input.videoPath,
     "-frames:v",
     "1",
+    // 640 px wide is plenty for the model to see the scene and keeps each PNG small;
+    // smaller videos are left at their own size.
+    "-vf",
+    "scale='min(640,iw)':-2",
     "-f",
     "image2pipe",
     "-vcodec",

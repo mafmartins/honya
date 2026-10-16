@@ -75,6 +75,17 @@ The exact flag list is the builder's to finalize; the rule is "the smallest set 
 - `build/ffmpeg/*` stays git-ignored except the README and `VERSION`.
 - Update `build/ffmpeg/README.md` to describe the new flow and replace the old configure line.
 
+## Signing and first launch
+
+Releases are unsigned for now: no Apple Developer ID, no notarization, no Windows code-signing certificate (user's decision, 2026-10-16). macOS still requires an ad-hoc signature on Apple Silicon, which electron-builder applies to the app and the workflow applies to ffmpeg. When a Developer ID is added later, electron-builder signs ffmpeg through `mac.binaries` with no change to the build workflow.
+
+The project `README.md` gets an "Installing" section with first-launch steps:
+
+- **macOS:** open Honya once, dismiss the "Apple could not verify" dialog, then go to System Settings → Privacy & Security, click **Open Anyway** next to the Honya message, and confirm. Needed once per installed version. As an alternative for technical users: `xattr -dr com.apple.quarantine /Applications/Honya.app`.
+- **Windows:** on the SmartScreen "Windows protected your PC" screen, click **More info** → **Run anyway**.
+- **Linux:** make the AppImage executable (`chmod +x Honya-*.AppImage`) and run it.
+- A short note on why: the app is not signed because signing costs a yearly fee; the source and build steps are public in the repository.
+
 ## Constraints
 
 - Node 24.21 and the project's existing rules (strict TypeScript, pinned dependencies at least a week old, single-line commits) apply to any script code.

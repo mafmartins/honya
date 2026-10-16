@@ -11,5 +11,13 @@
     "version": "1.3.2",
     "sha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
   },
-  "build": 2
+  "build": 2,
+  "assets": {
+    "ffmpeg-mac": "c2000ffc3406b33d879b7087837c46149dbc1df072ea22d61ac89a0a6eb463b5",
+    "ffmpeg-win.exe": "f34ca4ead6db567c095e701e4dead7dbeeb3764920f4676cf4791d54a70aaa30",
+    "ffmpeg-linux": "951d579ceac6f026ad117912d7ae12abdca74b9973fed85b703c12893fbdbc52",
+    "COPYING.LGPLv2.1": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+    "COPYING.dav1d": "dd92c3c2247c5651606fc23a5e2d6a1ebc5ace9a3e49cbde0e12f05ad1cb1ee5",
+    "SOURCES.txt": "26022ad73942353c193f4a8f9eb2378ef67fe8e11ff98a113d0c8ffdfd0b7635"
+  }
 }

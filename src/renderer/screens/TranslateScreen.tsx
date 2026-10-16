@@ -178,26 +178,27 @@ export function TranslateScreen(props: {
     })
   }
 
+  const showJob =
+    phase === "loading" || phase === "styles" || phase === "running" || phase === "halted"
+
   return (
     <>
       <header className="card-header">
-        <div>
-          <h1>Translate</h1>
-          {target.kind === "new" ? (
-            <>
-              <p>
-                {`${target.scriptName} · ${target.seriesName} · ${target.request.variant} · ${target.request.provider} · ${target.request.preset}`}
-              </p>
-              {prepared === null ? null : <p>{`Output: ${prepared.outputPath}`}</p>}
-            </>
-          ) : null}
-        </div>
+        <p>Translate</p>
         {phase === "running" ? null : (
           <button type="button" className="link" onClick={props.onBack}>
             Back
           </button>
         )}
       </header>
+      {showJob && target.kind === "new" ? (
+        <div className="job">
+          <p>
+            {`${target.scriptName} · ${target.seriesName} · ${target.request.variant} · ${target.request.provider} · ${target.request.preset}`}
+          </p>
+          {prepared === null ? null : <p>{`Output: ${prepared.outputPath}`}</p>}
+        </div>
+      ) : null}
       {phase === "styles" && prepared !== null && target.kind === "new" ? (
         <StylesStep
           styles={prepared.styles}

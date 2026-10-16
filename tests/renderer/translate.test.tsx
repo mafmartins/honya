@@ -165,6 +165,19 @@ describe("translate screen", () => {
     expect(english.parentElement).toBe(words.parentElement)
   })
 
+  it("shows the job line while running but not in review", async () => {
+    const api = fakeApi()
+    render(<Harness api={api} target={NEW_TARGET} />)
+    await screen.findByRole("button", { name: "Stop" })
+    expect(screen.getByText(/ · claude · /)).toBeTruthy()
+    act(() => {
+      api.emitTranslate({ type: "finished", sessionId: "session-1", openFlags: 0 })
+    })
+    await screen.findByText("Done")
+    expect(screen.queryByText(/ · claude · /)).toBeNull()
+    expect(screen.queryByText(/^Output:/)).toBeNull()
+  })
+
   it("shows an event emitted before startTranslation resolves", async () => {
     const holder: { api: ReturnType<typeof fakeApi> | null } = { api: null }
     const api = fakeApi({

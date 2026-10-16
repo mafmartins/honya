@@ -32,11 +32,16 @@ body {
   box-shadow: 7px 7px 0 #2a2420;
 }
 
-.card-header p {
+.card-header p,
+.job p {
   margin: 0;
 }
 
-.card-header p + p {
+.job {
+  margin-bottom: 8px;
+}
+
+.job p + p {
   margin-top: 4px;
 }
 
@@ -216,7 +221,7 @@ button.link:active:not(:disabled) {
 }
 
 .live-scroll {
-  max-height: 320px;
+  max-height: 240px;
   overflow-y: auto;
   margin: 0 0 16px;
   border: 1.5px dashed #2a2420;
@@ -297,7 +302,7 @@ progress {
 }
 
 .review-all {
-  max-height: 200px;
+  max-height: 160px;
   overflow-y: auto;
   border: 1.5px dashed #2a2420;
 }

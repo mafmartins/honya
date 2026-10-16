@@ -198,7 +198,7 @@ describe("start screen", () => {
       expect(button instanceof HTMLButtonElement && button.disabled).toBe(false)
     })
     fireEvent.click(button)
-    expect(await screen.findByRole("heading", { name: "Translate" })).toBeTruthy()
+    expect(await screen.findByText("Translate")).toBeTruthy()
   })
 
   it("shows the unfinished translation and resumes it", async () => {
@@ -217,7 +217,7 @@ describe("start screen", () => {
     render(<App api={api} />)
     expect(await screen.findByText("Unfinished: ep01.ass · Frieren · batch 2 of 5")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Resume" }))
-    expect(await screen.findByRole("heading", { name: "Translate" })).toBeTruthy()
+    expect(await screen.findByText("Translate")).toBeTruthy()
   })
 
   it("describes a session in review by its open flags", async () => {

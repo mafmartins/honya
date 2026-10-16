@@ -226,6 +226,23 @@ describe("createRunner", () => {
     )
   })
 
+  it("counts frames as they are grabbed", async () => {
+    const h = harness()
+    h.deps.grabFrames = (cues, _video, _setting, progress) => {
+      for (let done = 1; done <= cues.length; done += 1) {
+        progress(done, cues.length)
+      }
+      return Promise.resolve({ frames: new Map(), notes: [] })
+    }
+    const runner = createRunner(h.deps)
+    await runner.start({ ...REQUEST, frameSetting: "marked", videoPath: "/v.mkv" })
+    await runner.idle()
+    const texts = h.events.flatMap((event) => (event.type === "activity" ? [event.text] : []))
+    expect(texts).toContain("Grabbing frames · 0 of 60")
+    expect(texts).toContain("Grabbing frames · 1 of 60")
+    expect(texts).toContain("Grabbing frames · 60 of 60")
+  })
+
   it("reports retries in the activity line", async () => {
     const h = harness()
     h.deps.completerFor = (_provider, onRetry) => {

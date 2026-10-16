@@ -229,6 +229,8 @@ function sleep(ms: number): Promise<void> {
 async function grabFrames(
   cues: readonly DialogueCue[],
   videoPath: string,
+  _setting: "marked" | "every",
+  progress: (done: number, total: number) => void,
 ): Promise<{ frames: Map<string, Uint8Array>; notes: string[] }> {
   const frames = new Map<string, Uint8Array>()
   const notes: string[] = []
@@ -246,6 +248,7 @@ async function grabFrames(
     } catch {
       notes.push(`event ${String(cue.index)}: frame grab failed`)
     }
+    progress(frames.size + notes.length, cues.length)
   }
   return { frames, notes }
 }

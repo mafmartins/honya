@@ -61,6 +61,7 @@ export interface RunnerDeps {
     cues: readonly DialogueCue[],
     videoPath: string,
     setting: "marked" | "every",
+    progress: (done: number, total: number) => void,
   ): Promise<{ frames: Map<string, Uint8Array>; notes: string[] }>
   ffmpegReady(): boolean
   readScript(path: string): string
@@ -264,9 +265,17 @@ export function createRunner(deps: RunnerDeps): Runner {
     if (remaining.length === 0) {
       return frames
     }
-    activity(session, "Grabbing frames")
+    const counted = (done: number, total: number): void => {
+      activity(session, `Grabbing frames · ${String(done)} of ${String(total)}`)
+    }
+    counted(0, remaining.length)
     try {
-      const grabbed = await deps.grabFrames(remaining, session.videoPath, session.frameSetting)
+      const grabbed = await deps.grabFrames(
+        remaining,
+        session.videoPath,
+        session.frameSetting,
+        counted,
+      )
       for (const [id, bytes] of grabbed.frames) {
         frames.set(id, bytes)
       }

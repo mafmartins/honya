@@ -8,23 +8,6 @@
   </head>
   <body>
     <main id="app"></main>
-    <script type="module">
-      import { render } from "./view.js"
-
-      const root = document.querySelector("#app")
-      if (root !== null) {
-        root.innerHTML = render({
-          screen: "start",
-          series: "",
-          fileName: "",
-          variant: "pt-pt",
-          preset: "save",
-          provider: "claude",
-          openFlagCount: 0,
-          current: null,
-          proposal: null,
-        })
-      }
-    </script>
+    <script type="module" src="./main.js"></script>
   </body>
 </html>

@@ -20,11 +20,13 @@ await build({
 })
 
 await build({
-  entryPoints: ["src/renderer/view.ts"],
+  entryPoints: ["src/renderer/main.tsx"],
   bundle: true,
   platform: "browser",
   format: "esm",
-  outfile: "dist/renderer/view.js",
+  jsx: "automatic",
+  define: { "process.env.NODE_ENV": '"production"' },
+  outfile: "dist/renderer/main.js",
 })
 
 await mkdir("dist/renderer", { recursive: true })

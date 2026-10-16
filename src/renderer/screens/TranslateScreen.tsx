@@ -4,12 +4,13 @@ import { useReport } from "../action"
 import { errorMessage, useApi } from "../api"
 import type { TranslateTarget } from "../App"
 import { HaltPanel } from "../translate/HaltPanel"
+import { ReviewPanel } from "../translate/ReviewPanel"
 import { LivePanel, type Progress } from "../translate/LivePanel"
 import { StylesStep } from "../translate/StylesStep"
 
 type NewRequest = Extract<TranslateTarget, { kind: "new" }>["request"]
 
-type Phase = "loading" | "styles" | "empty" | "running" | "halted" | "review"
+type Phase = "loading" | "styles" | "empty" | "running" | "halted" | "review" | "finishing"
 
 export function TranslateScreen(props: {
   target: TranslateTarget
@@ -35,6 +36,7 @@ export function TranslateScreen(props: {
   const [lines, setLines] = useState<LiveLine[]>([])
   const [halt, setHalt] = useState<"stopped" | "failed">("stopped")
   const [stopping, setStopping] = useState(false)
+  const [reviewId, setReviewId] = useState<string | null>(null)
   const sessionId = useRef<string | null>(target.kind === "resume" ? target.id : null)
   const early = useRef<TranslateEvent[]>([])
   const apply = useCallback(
@@ -65,6 +67,7 @@ export function TranslateScreen(props: {
           break
         case "finished":
           setStopping(false)
+          setReviewId(event.sessionId)
           setPhase("review")
           break
       }
@@ -210,7 +213,15 @@ export function TranslateScreen(props: {
       {phase === "halted" ? (
         <HaltPanel kind={halt} onResume={resume} onBack={props.onBack} />
       ) : null}
-      {phase === "review" ? <p>Review</p> : null}
+      {phase === "review" && reviewId !== null ? (
+        <ReviewPanel
+          sessionId={reviewId}
+          onFinish={() => {
+            setPhase("finishing")
+          }}
+        />
+      ) : null}
+      {phase === "finishing" ? <p>Writing the file…</p> : null}
     </>
   )
 }

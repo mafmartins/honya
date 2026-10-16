@@ -214,14 +214,14 @@ describe("translate screen", () => {
     expect(screen.queryByRole("alert")).toBeNull()
   })
 
-  it("shows the review placeholder on finished", async () => {
+  it("leaves review at once on finished when no flag is open", async () => {
     const api = fakeApi()
     render(<Harness api={api} target={NEW_TARGET} />)
     await screen.findByRole("button", { name: "Stop" })
     act(() => {
       api.emitTranslate({ type: "finished", sessionId: "session-1", openFlags: 2 })
     })
-    expect(screen.getByText("Review")).toBeTruthy()
+    expect(await screen.findByText("Writing the file…")).toBeTruthy()
   })
 
   it("resumes a target by id and keeps a finished event that comes early", async () => {
@@ -234,7 +234,7 @@ describe("translate screen", () => {
     holder.api = api
     render(<Harness api={api} target={{ kind: "resume", id: "s9" }} />)
     expect(resumeTranslation).toHaveBeenCalledWith("s9")
-    expect(await screen.findByText("Review")).toBeTruthy()
+    expect(await screen.findByText("Writing the file…")).toBeTruthy()
   })
 
   it("shows a prepare error and keeps Back", async () => {

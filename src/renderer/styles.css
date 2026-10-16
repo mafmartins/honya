@@ -253,3 +253,75 @@ progress {
   width: 100%;
   accent-color: #e36b1e;
 }
+
+.review {
+  min-width: 0;
+}
+
+.review-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.review p,
+.review li {
+  overflow-wrap: anywhere;
+}
+
+.review .faded {
+  opacity: 0.5;
+}
+
+.review .current {
+  font-weight: 600;
+}
+
+.review .note {
+  color: #e36b1e;
+}
+
+.review textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 80px;
+}
+
+.review-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.review-all {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1.5px dashed #2a2420;
+}
+
+.review-all ul,
+.proposal ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.review-all button {
+  text-align: left;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.review-all button.flagged {
+  color: #e36b1e;
+}
+
+.review-all button.here {
+  font-weight: 600;
+}
+
+.proposal label {
+  display: block;
+}

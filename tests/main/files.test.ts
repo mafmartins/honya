@@ -40,7 +40,7 @@ describe("file dialogs", () => {
   })
 
   it("accepts a script with a byte order mark and windows line endings", async () => {
-    const path = fixture("aegisub.ass", `﻿${SCRIPT.replaceAll("\n", "\r\n")}`)
+    const path = fixture("aegisub.ass", `\uFEFF${SCRIPT.replaceAll("\n", "\r\n")}`)
     const picked = await pickScript(() => Promise.resolve(path))
     expect(picked?.text.startsWith("[Script Info]")).toBe(true)
   })

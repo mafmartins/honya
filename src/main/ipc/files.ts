@@ -63,7 +63,7 @@ export async function pickExample(open: OpenFile): Promise<PickedExample | null>
 }
 
 function readScript(path: string): { text: string; cues: DialogueCue[] } {
-  const text = readFileSync(path, "utf8").replace(/^﻿/, "")
+  const text = readFileSync(path, "utf8").replace(/^\uFEFF/, "")
   let cues: DialogueCue[] = []
   try {
     cues = readAss(text)

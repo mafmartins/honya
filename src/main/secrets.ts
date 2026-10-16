@@ -24,6 +24,9 @@ const NO_ENCRYPTION = "This system can't encrypt keys, so Honya won't store them
 export function createSecretStore(safeStorage: SecretSafeStorage, file: SecretFile): SecretStore {
   return {
     setKey(provider, key) {
+      if (key.trim() === "") {
+        throw new Error("Enter a key before saving.")
+      }
       if (!safeStorage.isEncryptionAvailable()) {
         throw new Error(NO_ENCRYPTION)
       }

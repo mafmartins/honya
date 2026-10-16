@@ -48,4 +48,19 @@ describe("secrets", () => {
     }).toThrow("This system can't encrypt keys, so Honya won't store them.")
     expect(files.size).toBe(0)
   })
+
+  it("refuses to remove a key when encryption is unavailable", () => {
+    const { store } = fakeStore(false)
+    expect(() => {
+      store.removeKey("claude")
+    }).toThrow("This system can't encrypt keys, so Honya won't store them.")
+  })
+
+  it("refuses a blank key", () => {
+    const { store, files } = fakeStore()
+    expect(() => {
+      store.setKey("claude", "   ")
+    }).toThrow("Enter a key before saving.")
+    expect(files.size).toBe(0)
+  })
 })

@@ -152,7 +152,7 @@ function onInvoke(channel: string, handle: (args: readonly unknown[]) => unknown
 }
 
 function openWindow(): void {
-  const rendererPath = join(app.getAppPath(), "src", "renderer", "index.html")
+  const rendererPath = join(app.getAppPath(), "dist", "renderer", "index.html")
   const window = new BrowserWindow({
     width: 1100,
     height: 760,

@@ -1,6 +1,9 @@
 import { execFileSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { buildSync } from "esbuild"
 import { describe, expect, it } from "vitest"
 import { emptyBase } from "../../src/core/library/card"
 import {
@@ -35,8 +38,19 @@ function card(screen: Screen): AppState {
   }
 }
 
-function renderFromBrowser(state: AppState): string {
-  const modulePath = fileURLToPath(new URL("../../src/renderer/view.js", import.meta.url))
+function bundleView(): string {
+  const outfile = join(mkdtempSync(join(tmpdir(), "honya-view-")), "view.js")
+  buildSync({
+    entryPoints: [fileURLToPath(new URL("../../src/renderer/view.ts", import.meta.url))],
+    bundle: true,
+    platform: "browser",
+    format: "esm",
+    outfile,
+  })
+  return outfile
+}
+
+function renderFromBrowser(modulePath: string, state: AppState): string {
   const source = [
     `import { render } from ${JSON.stringify(modulePath)}`,
     `const html = render(${JSON.stringify(state)})`,
@@ -184,12 +198,13 @@ describe("render", () => {
       proposal: null,
     }
     const page = readFileSync(fileURLToPath(new URL("../../src/renderer/index.html", import.meta.url)), "utf8")
-    const browser = readFileSync(fileURLToPath(new URL("../../src/renderer/view.js", import.meta.url)), "utf8")
+    const modulePath = bundleView()
+    const browser = readFileSync(modulePath, "utf8")
     expect(page).toContain('from "./view.js"')
     expect(page).toContain("render(")
     expect(browser).not.toContain("ass-compiler")
     expect(browser).not.toMatch(/from\s+["'][^"']+\.ts["']/)
-    expect(renderFromBrowser(state)).toBe(render(state))
+    expect(renderFromBrowser(modulePath, state)).toBe(render(state))
   })
 
   it("renders a core proposal when the display proposal is null", () => {

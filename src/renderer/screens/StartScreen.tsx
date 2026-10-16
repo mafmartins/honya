@@ -56,7 +56,10 @@ export function StartScreen(props: {
           <div className="field">
             <span>file</span>
             <div className="picked">
-              <span className={session.script === null ? "slot muted" : "slot"}>
+              <span
+                className={session.script === null ? "slot muted" : "slot"}
+                title={session.script?.name}
+              >
                 {session.script === null ? "No script chosen" : session.script.name}
               </span>
               <button
@@ -150,7 +153,10 @@ export function StartScreen(props: {
           <div className="field">
             <span>video</span>
             <div className="picked">
-              <span className={session.video === null ? "slot muted" : "slot"}>
+              <span
+                className={session.video === null ? "slot muted" : "slot"}
+                title={session.video?.name}
+              >
                 {session.video === null ? "No video chosen" : session.video.name}
               </span>
               {session.video === null ? null : (

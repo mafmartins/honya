@@ -10,6 +10,7 @@ body {
   box-sizing: border-box;
   padding: 24px 16px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
   font-size: 18px;
@@ -37,7 +38,7 @@ body {
 .review-body,
 .split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 28px;
   margin-top: 20px;
 }
@@ -129,6 +130,10 @@ p {
 
 .picked > .slot {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border: 1.5px dashed #2a2420;
   padding: 8px 10px;
 }
@@ -139,6 +144,7 @@ p {
 }
 
 .picked > button {
+  flex: none;
   margin: 0;
 }
 

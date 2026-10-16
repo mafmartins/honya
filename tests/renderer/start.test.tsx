@@ -133,7 +133,7 @@ describe("start screen", () => {
     const frames = screen.getByLabelText("frame setting")
     expect(frames instanceof HTMLSelectElement && frames.disabled).toBe(true)
     fireEvent.click(screen.getByRole("button", { name: "Choose video…" }))
-    expect(await screen.findByText("ep01.mkv")).toBeTruthy()
+    expect((await screen.findByText("ep01.mkv")).getAttribute("title")).toBe("ep01.mkv")
     expect(frames instanceof HTMLSelectElement && frames.disabled).toBe(false)
     fireEvent.click(screen.getByRole("button", { name: "Clear video" }))
     expect(frames instanceof HTMLSelectElement && frames.disabled).toBe(true)

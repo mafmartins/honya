@@ -2,3 +2,8 @@
 .worktrees/
 node_modules/
 dist/
+release/
+graphify-out/
+.DS_Store
+build/ffmpeg/*
+!build/ffmpeg/README.md

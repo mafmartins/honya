@@ -1,35 +1,26 @@
 import { contextBridge, ipcRenderer } from "electron"
-import type { PreflightResult } from "../core/pipeline/preflight"
 import { readBaseProfile } from "../core/library/guards"
-import type { ProviderId } from "../core/pipeline/types"
-import type { Flag } from "../core/review/review"
-import type {
-  ExportRequest,
-  ExportResponse,
-  PreflightRequest,
-  StartRequest,
-  StartResponse,
-} from "../main/main"
-import type { SetupApi } from "../shared/api"
+import type { HonyaApi } from "../shared/api"
 import {
   ipcMessage,
   readBoolean,
+  readCheckResult,
+  readFinishResult,
   readLoadedBase,
   readModelPair,
   readNothing,
   readPickedExample,
   readPickedScript,
   readPickedVideo,
+  readPreparedScript,
+  readReviewView,
   readRules,
   readSeriesList,
   readSeriesSummary,
+  readString,
+  readTranslateEvent,
+  readUnfinished,
 } from "./readers"
-
-interface HonyaApi extends SetupApi {
-  preflight(input: PreflightRequest): Promise<PreflightResult>
-  start(input: StartRequest): Promise<StartResponse>
-  export(input: ExportRequest): Promise<ExportResponse>
-}
 
 const honya: HonyaApi = {
   pickScript: () => picked("honya:pick-script", [], readPickedScript),
@@ -53,14 +44,37 @@ const honya: HonyaApi = {
   saveBase: (base) => read("honya:save-base", [base], readBaseProfile),
   importExample: (variant, name, text, styles) =>
     read("honya:import-example", [variant, name, text, styles], readBaseProfile),
-  preflight(input) {
-    return read("honya:preflight", [input], readPreflightResult)
-  },
-  start(input) {
-    return read("honya:start", [input], readStartResponse)
-  },
-  export(input) {
-    return read("honya:export", [input], readExportResponse)
+  prepareTranslation: (scriptPath, variant) =>
+    read("honya:translate-prepare", [scriptPath, variant], readPreparedScript),
+  startTranslation: (request) => read("honya:translate-start", [request], readString),
+  resumeTranslation: (id) => read("honya:translate-resume", [id], readString),
+  stopTranslation: () => read("honya:translate-stop", [], readNothing),
+  latestUnfinished: () => picked("honya:translate-latest", [], readUnfinished),
+  discardTranslation: (id) => read("honya:translate-discard", [id], readNothing),
+  loadReview: (id) => read("honya:review-load", [id], readReviewView),
+  acceptLine: (id, eventIndex, words) =>
+    read("honya:review-accept", [id, eventIndex, words], readReviewView),
+  checkEdit: (id, eventIndex, words) =>
+    read("honya:review-check", [id, eventIndex, words], readCheckResult),
+  confirmEdit: (id, eventIndex, words, proposal, applyOthers, ruleTarget) =>
+    read(
+      "honya:review-confirm",
+      [id, eventIndex, words, proposal, applyOthers, ruleTarget],
+      readReviewView,
+    ),
+  finishTranslation: (id) => read("honya:translate-finish", [id], readFinishResult),
+  revealOutput: (id) => read("honya:translate-reveal", [id], readNothing),
+  onTranslateEvent(listener) {
+    const handler = (_event: unknown, value: unknown): void => {
+      const event = readTranslateEvent(value)
+      if (event !== null) {
+        listener(event)
+      }
+    }
+    ipcRenderer.on("honya:translate-event", handler)
+    return () => {
+      ipcRenderer.removeListener("honya:translate-event", handler)
+    }
   },
 }
 
@@ -105,126 +119,4 @@ async function picked<T>(
 ): Promise<T | null> {
   const result = await read(channel, args, parse)
   return result.value
-}
-
-function readPreflightResult(value: unknown): PreflightResult | null {
-  if (!isRecord(value) || typeof value.ok !== "boolean") {
-    return null
-  }
-  if (!value.ok) {
-    return isPreflightReason(value.reason) ? { ok: false, reason: value.reason } : null
-  }
-  if (!isRecord(value.summary)) {
-    return null
-  }
-  const summary = value.summary
-  if (!isProviderId(summary.provider) || !isPreset(summary.preset)) {
-    return null
-  }
-  if (!isFiniteNumber(summary.dialogueLineCount) || !isFiniteNumber(summary.frameCount)) {
-    return null
-  }
-  if (typeof summary.outputPath !== "string") {
-    return null
-  }
-  return {
-    ok: true,
-    summary: {
-      provider: summary.provider,
-      preset: summary.preset,
-      dialogueLineCount: summary.dialogueLineCount,
-      frameCount: summary.frameCount,
-      outputPath: summary.outputPath,
-    },
-  }
-}
-
-function readStartResponse(value: unknown): StartResponse | null {
-  if (!isRecord(value) || typeof value.ok !== "boolean") {
-    return null
-  }
-  if (!value.ok) {
-    if (value.reason === "write" && typeof value.sessionId === "string") {
-      return { ok: false, reason: "write", sessionId: value.sessionId }
-    }
-    return isPreflightReason(value.reason) ? { ok: false, reason: value.reason } : null
-  }
-  if (value.mode === "autonomous") {
-    if (
-      typeof value.sessionId !== "string" ||
-      typeof value.outputPath !== "string" ||
-      typeof value.draft !== "string"
-    ) {
-      return null
-    }
-    return {
-      ok: true,
-      mode: "autonomous",
-      sessionId: value.sessionId,
-      outputPath: value.outputPath,
-      draft: value.draft,
-    }
-  }
-  if (
-    value.mode !== "assisted" ||
-    typeof value.sessionId !== "string" ||
-    typeof value.draft !== "string"
-  ) {
-    return null
-  }
-  if (!isFlagList(value.flags)) {
-    return null
-  }
-  return {
-    ok: true,
-    mode: "assisted",
-    sessionId: value.sessionId,
-    draft: value.draft,
-    flags: value.flags,
-  }
-}
-
-function readExportResponse(value: unknown): ExportResponse | null {
-  if (!isRecord(value) || typeof value.ok !== "boolean") {
-    return null
-  }
-  if (value.ok) {
-    return typeof value.outputPath === "string" ? { ok: true, outputPath: value.outputPath } : null
-  }
-  if (value.reason === "flags" || value.reason === "missing" || value.reason === "write") {
-    return { ok: false, reason: value.reason }
-  }
-  return null
-}
-
-function isFlagList(value: unknown): value is Flag[] {
-  return isUnknownArray(value) && value.every(isFlag)
-}
-
-function isFlag(value: unknown): value is Flag {
-  return isRecord(value) && isFiniteNumber(value.eventIndex) && typeof value.open === "boolean"
-}
-
-function isPreflightReason(value: unknown): value is "styles" | "key" | "no-dialogue" | "ffmpeg" {
-  return value === "styles" || value === "key" || value === "no-dialogue" || value === "ffmpeg"
-}
-
-function isProviderId(value: unknown): value is ProviderId {
-  return value === "claude" || value === "gpt" || value === "gemini" || value === "mistral"
-}
-
-function isPreset(value: unknown): value is "save" | "balanced" | "best" {
-  return value === "save" || value === "balanced" || value === "best"
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-function isUnknownArray(value: unknown): value is readonly unknown[] {
-  return Array.isArray(value)
 }

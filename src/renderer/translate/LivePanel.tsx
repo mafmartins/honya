@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import type { LiveLine } from "../../shared/api"
+import { ActivityLine } from "./ActivityLine"
 
 export interface Progress {
   index: number
@@ -37,7 +38,7 @@ export function LivePanel(props: {
       {progress === null ? null : (
         <p>{`${String(progress.linesDone)} of ${String(progress.lineTotal)} lines`}</p>
       )}
-      {props.activity === null ? null : <p className="muted">{props.activity}</p>}
+      {props.activity === null ? null : <ActivityLine key={props.activity} text={props.activity} />}
       <div
         className="live-scroll"
         ref={list}

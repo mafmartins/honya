@@ -46,9 +46,12 @@ export interface RunInput {
   sleep: (ms: number) => Promise<void>
   stopAfterBatches?: number
   frameSetting?: "none" | "marked" | "every"
-  frames?: ReadonlyMap<string, Uint8Array>
+  // Asked for the frames one request needs, by line id, just before that request.
+  frames?: FrameProvider
   onEvent?: (event: RunEvent) => void
 }
+
+export type FrameProvider = (ids: readonly string[]) => Promise<ReadonlyMap<string, Uint8Array>>
 
 export interface RunResult {
   ass: string
@@ -59,7 +62,7 @@ export interface RunResult {
 const BRIEF_ASK = '{ "glossary": [{ "source", "pt" }], "hardIds": string[], "frameIds": string[] }'
 const BRIEF_UNAVAILABLE = "brief unavailable"
 const FAILED_REASON = "tradução falhou"
-const EMPTY_FRAMES: ReadonlyMap<string, Uint8Array> = new Map()
+const NO_FRAMES: FrameProvider = () => Promise.resolve(new Map())
 
 type FrameSetting = "none" | "marked" | "every"
 type Reply = { lines: LineResult[] } | { refused: true }
@@ -199,14 +202,14 @@ async function translateChunk(
   frameIds: ReadonlySet<string>,
 ): Promise<{ lines: LineResult[]; glossary: Glossary; strongIds: string[] }> {
   const setting = input.frameSetting ?? "none"
-  const frames = input.frames ?? EMPTY_FRAMES
+  const frames = input.frames ?? NO_FRAMES
   const ids = chunk.map((cue) => String(cue.index))
   const cheapLines = await requestMatching(
     input,
     batchRequest(
       "cheap",
       withGlossary(input.card, brief, glossary, cuePromptLines(chunk)),
-      imagesFor(chunk, setting, frames, frameIds),
+      await imagesFor(chunk, setting, frames, frameIds),
     ),
     ids,
     true,
@@ -239,7 +242,7 @@ async function translateChunk(
         nextGlossary,
         escalationPromptLines(escalated, signals, selected),
       ),
-      imagesFor(escalated, setting, frames, frameIds),
+      await imagesFor(escalated, setting, frames, frameIds),
     ),
     escalated.map((cue) => String(cue.index)),
     false,
@@ -262,7 +265,7 @@ async function escalateFailedChunk(
   hardIds: ReadonlySet<string>,
   frameIds: ReadonlySet<string>,
   setting: FrameSetting,
-  frames: ReadonlyMap<string, Uint8Array>,
+  frames: FrameProvider,
 ): Promise<{ lines: LineResult[]; glossary: Glossary; strongIds: string[] }> {
   const signals: LineSignals[] = chunk.map((cue) => ({
     id: String(cue.index),
@@ -287,7 +290,7 @@ async function escalateFailedChunk(
         glossary,
         escalationPromptLines(escalated, signals, selected),
       ),
-      imagesFor(escalated, setting, frames, frameIds),
+      await imagesFor(escalated, setting, frames, frameIds),
     ),
     escalated.map((cue) => String(cue.index)),
     false,
@@ -509,26 +512,28 @@ function cuePromptLines(cues: readonly DialogueCue[]): { id: string; words: stri
   return cues.map((cue) => ({ id: String(cue.index), words: cue.visible }))
 }
 
-function imagesFor(
+async function imagesFor(
   cues: readonly DialogueCue[],
   setting: FrameSetting,
-  frames: ReadonlyMap<string, Uint8Array>,
+  frames: FrameProvider,
   frameIds: ReadonlySet<string>,
-): FrameImage[] {
+): Promise<FrameImage[]> {
   if (setting === "none") {
     return []
   }
+  const ids = cues
+    .map((cue) => String(cue.index))
+    .filter((id) => setting === "every" || frameIds.has(id))
+  if (ids.length === 0) {
+    return []
+  }
+  const grabbed = await frames(ids)
   const images: FrameImage[] = []
-  for (const cue of cues) {
-    const id = String(cue.index)
-    if (setting === "marked" && !frameIds.has(id)) {
-      continue
+  for (const id of ids) {
+    const bytes = grabbed.get(id)
+    if (bytes !== undefined) {
+      images.push({ id, bytes })
     }
-    const bytes = frames.get(id)
-    if (bytes === undefined) {
-      continue
-    }
-    images.push({ id, bytes })
   }
   return images
 }

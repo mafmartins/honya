@@ -3,6 +3,7 @@ import { readAss, type DialogueCue } from "../../core/ass/script"
 import type { StyleCard, Variant } from "../../core/library/types"
 import { proposedOutputPath } from "../../core/pipeline/preflight"
 import {
+  type FrameProvider,
   resumeTranslation,
   runTranslation,
   totalBatches,
@@ -152,7 +153,7 @@ export function createRunner(deps: RunnerDeps): Runner {
     const cues = readAss(ass).filter((cue) => styles.has(cue.style))
     const english = new Map(cues.map((cue) => [String(cue.index), cue.visible]))
 
-    const frames = await gatherFrames(session, cues, resuming)
+    const frames = frameProvider(session, cues, resuming)
     const complete = deps.completerFor(session.provider, (delayMs, error) => {
       const seconds = Math.round(delayMs / 1000)
       const text =
@@ -251,43 +252,47 @@ export function createRunner(deps: RunnerDeps): Runner {
     })
   }
 
-  const gatherFrames = async (
+  // Grabs the frames one request needs, when the pipeline asks for them, and keeps them
+  // for the rest of the run so a retried or escalated request doesn't grab them again.
+  const frameProvider = (
     session: TranslateSession,
     cues: readonly DialogueCue[],
     resuming: boolean,
-  ): Promise<Map<string, Uint8Array>> => {
-    const frames = new Map<string, Uint8Array>()
-    if (session.frameSetting === "none" || session.videoPath === null) {
-      return frames
-    }
-    const done = new Set(session.saved.results.map(([id]) => id))
-    const remaining = cues.filter((cue) => !done.has(String(cue.index)))
-    if (remaining.length === 0) {
-      return frames
-    }
-    const counted = (done: number, total: number): void => {
-      activity(session, `Grabbing frames · ${String(done)} of ${String(total)}`)
-    }
-    counted(0, remaining.length)
-    try {
-      const grabbed = await deps.grabFrames(
-        remaining,
-        session.videoPath,
-        session.frameSetting,
-        counted,
-      )
-      for (const [id, bytes] of grabbed.frames) {
-        frames.set(id, bytes)
+  ): FrameProvider => {
+    const kept = new Map<string, Uint8Array>()
+    const cueById = new Map(cues.map((cue) => [String(cue.index), cue]))
+    let videoMissing = false
+    return async (ids) => {
+      const videoPath = session.videoPath
+      if (session.frameSetting === "none" || videoPath === null || videoMissing) {
+        return kept
       }
-      session.frameNotes.push(...grabbed.notes)
-    } catch (error) {
-      if (!resuming) {
-        throw error
+      const missing = ids.flatMap((id) => {
+        const cue = cueById.get(id)
+        return cue === undefined || kept.has(id) ? [] : [cue]
+      })
+      if (missing.length > 0) {
+        const counted = (done: number, total: number): void => {
+          activity(session, `Grabbing frames · ${String(done)} of ${String(total)}`)
+        }
+        counted(0, missing.length)
+        try {
+          const grabbed = await deps.grabFrames(missing, videoPath, session.frameSetting, counted)
+          for (const [id, bytes] of grabbed.frames) {
+            kept.set(id, bytes)
+          }
+          session.frameNotes.push(...grabbed.notes)
+        } catch (error) {
+          if (!resuming) {
+            throw error
+          }
+          videoMissing = true
+          session.frameNotes.push(VIDEO_MISSING_NOTE)
+        }
+        session.framesUsed = kept.size
       }
-      session.frameNotes.push(VIDEO_MISSING_NOTE)
+      return kept
     }
-    session.framesUsed = frames.size
-    return frames
   }
 
   const startRun = (request: TranslateRequest): string => {

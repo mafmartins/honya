@@ -235,12 +235,14 @@ describe("createRunner", () => {
       return Promise.resolve({ frames: new Map(), notes: [] })
     }
     const runner = createRunner(h.deps)
-    await runner.start({ ...REQUEST, frameSetting: "marked", videoPath: "/v.mkv" })
+    await runner.start({ ...REQUEST, frameSetting: "every", videoPath: "/v.mkv" })
     await runner.idle()
     const texts = h.events.flatMap((event) => (event.type === "activity" ? [event.text] : []))
-    expect(texts).toContain("Grabbing frames · 0 of 60")
-    expect(texts).toContain("Grabbing frames · 1 of 60")
-    expect(texts).toContain("Grabbing frames · 60 of 60")
+    // One count per batch: 25, 25 and 10 lines.
+    expect(texts).toContain("Grabbing frames · 0 of 25")
+    expect(texts).toContain("Grabbing frames · 25 of 25")
+    expect(texts).toContain("Grabbing frames · 10 of 10")
+    expect(texts).not.toContain("Grabbing frames · 0 of 60")
   })
 
   it("reports retries in the activity line", async () => {

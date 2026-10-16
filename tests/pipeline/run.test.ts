@@ -146,3 +146,76 @@ describe("runTranslation", () => {
     expect(totalBatches(26)).toBe(2)
   })
 })
+
+describe("frames per batch", () => {
+  const card = {
+    variant: "pt-pt" as const,
+    seriesId: "s",
+    revision: 1,
+    cpsLimit: 17,
+    voice: "",
+    rules: [],
+  }
+
+  function completer(sentImages: string[][], briefFrameIds: string[]): Completer {
+    return (request) => {
+      if (request.prompt.includes('"frameIds": string[]')) {
+        return Promise.resolve({
+          lines: [{ id: "brief", words: "brief", mark: "clean" as const, frameIds: briefFrameIds }],
+        })
+      }
+      sentImages.push((request.images ?? []).map((image) => image.id))
+      const ids = [...request.prompt.matchAll(/^(\d+):/gm)].flatMap((m) =>
+        m[1] === undefined ? [] : [m[1]],
+      )
+      return Promise.resolve({
+        lines: ids.map((id) => ({ id, words: `pt ${id}`, mark: "clean" as const })),
+      })
+    }
+  }
+
+  function provider(
+    asked: string[][],
+  ): (ids: readonly string[]) => Promise<ReadonlyMap<string, Uint8Array>> {
+    return (ids) => {
+      asked.push([...ids])
+      return Promise.resolve(new Map(ids.map((id) => [id, new Uint8Array([1])])))
+    }
+  }
+
+  it("asks for every line's frame one batch at a time", async () => {
+    const asked: string[][] = []
+    const sent: string[][] = []
+    await runTranslation({
+      ass: scriptWith(30),
+      dialogueStyles: new Set(["Default"]),
+      card,
+      preset: "save",
+      complete: completer(sent, []),
+      sleep: async () => {},
+      frameSetting: "every",
+      frames: provider(asked),
+    })
+    const range = (from: number, to: number): string[] =>
+      Array.from({ length: to - from }, (_, i) => String(from + i))
+    expect(asked).toEqual([range(0, 25), range(25, 30)])
+    expect(sent).toEqual([range(0, 25), range(25, 30)])
+  })
+
+  it("asks only for the frames the brief marked, and not at all for batches without one", async () => {
+    const asked: string[][] = []
+    const sent: string[][] = []
+    await runTranslation({
+      ass: scriptWith(30),
+      dialogueStyles: new Set(["Default"]),
+      card,
+      preset: "save",
+      complete: completer(sent, ["3", "27"]),
+      sleep: async () => {},
+      frameSetting: "marked",
+      frames: provider(asked),
+    })
+    expect(asked).toEqual([["3"], ["27"]])
+    expect(sent).toEqual([["3"], ["27"]])
+  })
+})

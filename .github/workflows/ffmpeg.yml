@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+# One publish at a time, and never cancel one half way through.
+concurrency:
+  group: ffmpeg-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   clips:
     runs-on: ubuntu-latest
@@ -193,4 +198,5 @@ jobs:
             echo "- Windows x64: $(cat artifacts/ffmpeg-win/configure-line.txt)"
             echo "- Linux x64: $(cat artifacts/ffmpeg-linux/configure-line.txt)"
           } > release/SOURCES.txt
-          gh release create "$tag" --title "$tag" --notes-file release/SOURCES.txt release/*
+          # Tag the commit that was built, not wherever main is by now.
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file release/SOURCES.txt release/*

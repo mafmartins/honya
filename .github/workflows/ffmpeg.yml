@@ -1,0 +1,189 @@
+name: ffmpeg
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - build/ffmpeg/VERSION
+      - scripts/ffmpeg/**
+      - .github/workflows/ffmpeg.yml
+
+permissions:
+  contents: read
+
+jobs:
+  clips:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: scripts/ffmpeg/make-clips.sh clips
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clips
+          path: clips
+
+  mac:
+    runs-on: macos-latest
+    needs: clips
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - run: brew install meson ninja nasm
+      - run: scripts/ffmpeg/build.sh mac-arm64
+      - run: scripts/ffmpeg/build.sh mac-x86_64
+      - name: Merge into one universal binary
+        run: |
+          mkdir -p out/mac
+          lipo -create out/mac-arm64/ffmpeg out/mac-x86_64/ffmpeg -output out/mac/ffmpeg
+          codesign -s - --force out/mac/ffmpeg
+          codesign --verify out/mac/ffmpeg
+          archs="$(lipo -archs out/mac/ffmpeg)"
+          if [ "$archs" != "x86_64 arm64" ]; then
+            echo "Expected 'x86_64 arm64', got '$archs'" >&2
+            exit 1
+          fi
+          cp out/mac-arm64/configure-line.txt out/mac/configure-line-arm64.txt
+          cp out/mac-x86_64/configure-line.txt out/mac/configure-line-x86_64.txt
+      - run: node scripts/ffmpeg/check.ts mac out/mac/ffmpeg
+      - uses: actions/download-artifact@v4
+        with:
+          name: clips
+          path: clips
+      - run: node scripts/ffmpeg/smoke.ts out/mac/ffmpeg clips
+      - name: Smoke test the Intel slice under Rosetta
+        run: |
+          softwareupdate --install-rosetta --agree-to-license || true
+          arch -x86_64 out/mac-x86_64/ffmpeg -hide_banner -version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-mac
+          path: |
+            out/mac/ffmpeg
+            out/mac/configure-line-arm64.txt
+            out/mac/configure-line-x86_64.txt
+
+  win-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - run: sudo apt-get update && sudo apt-get install -y mingw-w64 meson ninja-build nasm pkg-config
+      - run: scripts/ffmpeg/build.sh win
+      - run: node scripts/ffmpeg/check.ts win out/win/ffmpeg.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-win
+          path: |
+            out/win/ffmpeg.exe
+            out/win/configure-line.txt
+
+  win-test:
+    runs-on: windows-latest
+    needs: [clips, win-build]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-win
+          path: out/win
+      - uses: actions/download-artifact@v4
+        with:
+          name: clips
+          path: clips
+      - run: node scripts/ffmpeg/check.ts win out/win/ffmpeg.exe
+      - run: node scripts/ffmpeg/smoke.ts out/win/ffmpeg.exe clips
+
+  linux:
+    runs-on: ubuntu-latest
+    needs: clips
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: clips
+          path: clips
+      - name: Build, check and smoke test in Alpine
+        # JavaScript actions can't run inside an Alpine container, so the build runs
+        # through docker with the checkout mounted.
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w node:24-alpine sh -euc '
+            apk add --no-cache bash build-base nasm meson ninja pkgconf linux-headers file curl xz tar
+            scripts/ffmpeg/build.sh linux
+            node scripts/ffmpeg/check.ts linux out/linux/ffmpeg
+            node scripts/ffmpeg/smoke.ts out/linux/ffmpeg clips
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-linux
+          path: |
+            out/linux/ffmpeg
+            out/linux/configure-line.txt
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [mac, win-test, linux]
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Stop if this release already exists
+        id: tag
+        run: |
+          tag="$(node scripts/ffmpeg/pins.ts tag)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag already exists; not publishing"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.tag.outputs.exists == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Assemble and publish
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          tag="${{ steps.tag.outputs.tag }}"
+          mkdir -p release
+          cp artifacts/ffmpeg-mac/ffmpeg release/ffmpeg-mac
+          cp artifacts/ffmpeg-win/ffmpeg.exe release/ffmpeg-win.exe
+          cp artifacts/ffmpeg-linux/ffmpeg release/ffmpeg-linux
+          chmod +x release/ffmpeg-mac release/ffmpeg-linux
+          for asset in ffmpeg-mac ffmpeg-win.exe ffmpeg-linux; do
+            (cd release && sha256sum "$asset" > "$asset.sha256")
+          done
+          version="$(node scripts/ffmpeg/pins.ts ffmpeg.version)"
+          tarball="$(scripts/ffmpeg/fetch-source.sh "https://ffmpeg.org/releases/ffmpeg-$version.tar.xz" "$(node scripts/ffmpeg/pins.ts ffmpeg.sha256)" out/sources)"
+          cp "$tarball" release/
+          tar -xJf "$tarball" -O "ffmpeg-$version/COPYING.LGPLv2.1" > release/COPYING.LGPLv2.1
+          {
+            echo "LGPL ffmpeg builds for Honya ($tag)"
+            echo
+            echo "Sources:"
+            echo "- ffmpeg $version: https://ffmpeg.org/releases/ffmpeg-$version.tar.xz sha256 $(node scripts/ffmpeg/pins.ts ffmpeg.sha256) (attached)"
+            echo "- dav1d $(node scripts/ffmpeg/pins.ts dav1d.version): https://downloads.videolan.org/pub/videolan/dav1d/ sha256 $(node scripts/ffmpeg/pins.ts dav1d.sha256)"
+            echo "- zlib $(node scripts/ffmpeg/pins.ts zlib.version): https://zlib.net/ sha256 $(node scripts/ffmpeg/pins.ts zlib.sha256) (Windows and Linux; macOS uses the system zlib)"
+            echo
+            echo "Configure lines:"
+            echo "- macOS arm64: $(cat artifacts/ffmpeg-mac/configure-line-arm64.txt)"
+            echo "- macOS x86_64: $(cat artifacts/ffmpeg-mac/configure-line-x86_64.txt)"
+            echo "- Windows x64: $(cat artifacts/ffmpeg-win/configure-line.txt)"
+            echo "- Linux x64: $(cat artifacts/ffmpeg-linux/configure-line.txt)"
+          } > release/SOURCES.txt
+          gh release create "$tag" --title "$tag" --notes-file release/SOURCES.txt release/*

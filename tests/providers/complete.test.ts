@@ -214,3 +214,27 @@ describe("reasoning effort", () => {
     expect(await bodyFor("mistral", undefined)).not.toHaveProperty("reasoning_effort")
   })
 })
+
+describe("request timeout", () => {
+  it("gives up on a request that gets no reply and says so", async () => {
+    const hanging: typeof fetch = (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(init.signal?.reason instanceof Error ? init.signal.reason : new Error("aborted"))
+        })
+      })
+    await expect(
+      completeChat({
+        provider: "gemini",
+        model: defaultModels("gemini").cheap,
+        apiKey: "secret",
+        prompt: "0: Hello.",
+        fetch: hanging,
+        timeoutMs: 20,
+      }),
+    ).rejects.toMatchObject({
+      kind: "server",
+      message: "Gemini didn't answer within 3 minutes.",
+    })
+  })
+})

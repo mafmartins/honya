@@ -1,5 +1,5 @@
 import type { LineResult, ProviderId } from "../pipeline/types"
-import { providerError } from "./errors"
+import { ProviderError, providerError, providerName } from "./errors"
 
 export interface ChatInput {
   provider: ProviderId
@@ -9,7 +9,11 @@ export interface ChatInput {
   images?: { id: string; png: Uint8Array }[]
   fetch: typeof fetch
   effort?: "low"
+  // How long to wait for a reply before giving up; 3 minutes unless a test shortens it.
+  timeoutMs?: number
 }
+
+const REQUEST_TIMEOUT_MS = 3 * 60 * 1000
 
 type ChatReply = { lines: LineResult[] } | { refused: true }
 type ChatImage = { id: string; png: Uint8Array }
@@ -110,14 +114,24 @@ export async function completeText(
 async function send(input: ChatInput, request: ProviderRequest): Promise<string> {
   let response: Response
   let text: string
+  const timeout = AbortSignal.timeout(input.timeoutMs ?? REQUEST_TIMEOUT_MS)
   try {
     response = await input.fetch(request.url, {
       method: "POST",
       headers: request.headers,
       body: JSON.stringify(request.body),
+      signal: timeout,
     })
     text = await response.text()
   } catch {
+    if (timeout.aborted) {
+      throw new ProviderError(
+        "server",
+        input.provider,
+        `${providerName(input.provider)} didn't answer within 3 minutes.`,
+        null,
+      )
+    }
     throw providerError(input.provider, null, null)
   }
   if (response.status !== 200) {

@@ -174,3 +174,43 @@ describe("completeChat", () => {
     expect(result).toEqual({ lines: [{ id: "0", words: "Olá.", mark: "clean" }] })
   })
 })
+
+describe("reasoning effort", () => {
+  async function bodyFor(
+    provider: "claude" | "gpt" | "gemini" | "mistral",
+    effort: "low" | undefined,
+  ): Promise<Record<string, unknown>> {
+    let body = ""
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      await Promise.resolve()
+      body = typeof init?.body === "string" ? init.body : ""
+      return new Response(JSON.stringify({ lines: [] }), { status: 200 })
+    }
+    await completeChat({
+      provider,
+      model: defaultModels(provider).cheap,
+      apiKey: "secret",
+      prompt: "0: Hello.",
+      fetch: fetchImpl,
+      ...(effort === undefined ? {} : { effort }),
+    })
+    const parsed: unknown = JSON.parse(body)
+    return typeof parsed === "object" && parsed !== null ? { ...parsed } : {}
+  }
+
+  it("asks each provider for little reasoning when effort is low", async () => {
+    expect(await bodyFor("claude", "low")).toMatchObject({ output_config: { effort: "low" } })
+    expect(await bodyFor("gpt", "low")).toMatchObject({ reasoning_effort: "low" })
+    expect(await bodyFor("gemini", "low")).toMatchObject({
+      generationConfig: { thinkingConfig: { thinkingLevel: "low" } },
+    })
+    expect(await bodyFor("mistral", "low")).toMatchObject({ reasoning_effort: "none" })
+  })
+
+  it("leaves each provider's default reasoning when no effort is given", async () => {
+    expect(await bodyFor("claude", undefined)).not.toHaveProperty("output_config")
+    expect(await bodyFor("gpt", undefined)).not.toHaveProperty("reasoning_effort")
+    expect(await bodyFor("gemini", undefined)).not.toHaveProperty("generationConfig")
+    expect(await bodyFor("mistral", undefined)).not.toHaveProperty("reasoning_effort")
+  })
+})

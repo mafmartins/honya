@@ -8,6 +8,7 @@ export interface ChatInput {
   prompt: string
   images?: { id: string; png: Uint8Array }[]
   fetch: typeof fetch
+  effort?: "low"
 }
 
 type ChatReply = { lines: LineResult[] } | { refused: true }
@@ -52,20 +53,24 @@ interface GeminiImagePart {
 interface ClaudeBody {
   model: string
   max_tokens: number
+  output_config?: { effort: "low" }
   messages: { role: "user"; content: string | (TextPart | ClaudeImagePart)[] }[]
 }
 
 interface OpenAiBody {
   model: string
+  reasoning_effort?: "low"
   messages: { role: "user"; content: string | (TextPart | OpenAiImagePart)[] }[]
 }
 
 interface MistralBody {
   model: string
+  reasoning_effort?: "none"
   messages: { role: "user"; content: string | (TextPart | MistralImagePart)[] }[]
 }
 
 interface GeminiBody {
+  generationConfig?: { thinkingConfig: { thinkingLevel: "low" } }
   contents: { role: "user"; parts: (GeminiTextPart | GeminiImagePart)[] }[]
 }
 
@@ -129,25 +134,25 @@ function buildRequest(input: ChatInput, lines: boolean): ProviderRequest {
       return {
         url: "https://api.anthropic.com/v1/messages",
         headers: claudeHeaders(input.apiKey),
-        body: claudeBody(input.model, text, images),
+        body: claudeBody(input.model, text, images, input.effort),
       }
     case "gpt":
       return {
         url: "https://api.openai.com/v1/chat/completions",
         headers: bearerHeaders(input.apiKey),
-        body: openAiBody(input.model, text, images),
+        body: openAiBody(input.model, text, images, input.effort),
       }
     case "gemini":
       return {
         url: geminiUrl(input.model, input.apiKey),
         headers: { "Content-Type": "application/json" },
-        body: geminiBody(text, images),
+        body: geminiBody(text, images, input.effort),
       }
     case "mistral":
       return {
         url: "https://api.mistral.ai/v1/chat/completions",
         headers: bearerHeaders(input.apiKey),
-        body: mistralBody(input.model, text, images),
+        body: mistralBody(input.model, text, images, input.effort),
       }
   }
 }
@@ -175,32 +180,67 @@ function geminiUrl(model: string, apiKey: string): string {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
 }
 
-function claudeBody(model: string, text: string, images: readonly ChatImage[]): ClaudeBody {
-  return {
+function claudeBody(
+  model: string,
+  text: string,
+  images: readonly ChatImage[],
+  effort: ChatInput["effort"],
+): ClaudeBody {
+  const body: ClaudeBody = {
     model,
     max_tokens: CLAUDE_MAX_TOKENS,
     messages: [{ role: "user", content: claudeContent(text, images) }],
   }
+  if (effort === "low") {
+    body.output_config = { effort: "low" }
+  }
+  return body
 }
 
-function openAiBody(model: string, text: string, images: readonly ChatImage[]): OpenAiBody {
-  return {
+function openAiBody(
+  model: string,
+  text: string,
+  images: readonly ChatImage[],
+  effort: ChatInput["effort"],
+): OpenAiBody {
+  const body: OpenAiBody = {
     model,
     messages: [{ role: "user", content: openAiContent(text, images) }],
   }
+  if (effort === "low") {
+    body.reasoning_effort = "low"
+  }
+  return body
 }
 
-function mistralBody(model: string, text: string, images: readonly ChatImage[]): MistralBody {
-  return {
+function mistralBody(
+  model: string,
+  text: string,
+  images: readonly ChatImage[],
+  effort: ChatInput["effort"],
+): MistralBody {
+  const body: MistralBody = {
     model,
     messages: [{ role: "user", content: mistralContent(text, images) }],
   }
+  if (effort === "low") {
+    body.reasoning_effort = "none"
+  }
+  return body
 }
 
-function geminiBody(text: string, images: readonly ChatImage[]): GeminiBody {
-  return {
+function geminiBody(
+  text: string,
+  images: readonly ChatImage[],
+  effort: ChatInput["effort"],
+): GeminiBody {
+  const body: GeminiBody = {
     contents: [{ role: "user", parts: geminiParts(text, images) }],
   }
+  if (effort === "low") {
+    body.generationConfig = { thinkingConfig: { thinkingLevel: "low" } }
+  }
+  return body
 }
 
 function claudeContent(

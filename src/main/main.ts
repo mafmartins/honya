@@ -191,6 +191,9 @@ async function completeWithProvider(
     prompt: request.prompt,
     fetch,
   }
+  if (request.tier === "cheap") {
+    chat.effort = "low"
+  }
   if (request.images !== undefined) {
     chat.images = request.images.map((image) => ({ id: image.id, png: image.bytes }))
   }
@@ -207,7 +210,14 @@ async function askCheap(
   if (apiKey === null) {
     return { refused: true }
   }
-  return completeText({ provider, model: models.get(provider).cheap, apiKey, prompt, fetch })
+  return completeText({
+    provider,
+    model: models.get(provider).cheap,
+    apiKey,
+    prompt,
+    fetch,
+    effort: "low",
+  })
 }
 
 function sleep(ms: number): Promise<void> {

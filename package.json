@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "start": "node scripts/build.mjs && electron .",
-    "pack": "node scripts/build.mjs && electron-builder"
+    "fetch:ffmpeg": "node scripts/ffmpeg/fetch.ts",
+    "pack": "node scripts/ffmpeg/fetch.ts && node scripts/build.mjs && electron-builder"
   },
   "dependencies": {
     "ass-compiler": "0.1.16",

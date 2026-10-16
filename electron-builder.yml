@@ -1,4 +1,5 @@
-# CSC_LINK and the Windows certificate sign the app bundle, which covers the unpacked ffmpeg.
+# Releases are unsigned for now. When a certificate is configured (CSC_LINK on macOS,
+# the Windows certificate settings), electron-builder signs the app and the bundled ffmpeg.
 appId: dev.honya.app
 asar: true
 directories:
@@ -15,6 +16,8 @@ win:
 mac:
   target:
     - dmg
+  binaries:
+    - Contents/Resources/ffmpeg/ffmpeg
 linux:
   target:
     - AppImage

@@ -63,6 +63,7 @@ export interface RunnerDeps {
     videoPath: string,
     setting: "marked" | "every",
     progress: (done: number, total: number) => void,
+    shouldStop: () => boolean,
   ): Promise<{ frames: Map<string, Uint8Array>; notes: string[] }>
   ffmpegReady(): boolean
   readScript(path: string): string
@@ -87,6 +88,9 @@ interface BatchDone {
 }
 
 const NOTE = /\{note: ([^}]*)\}/
+// Thrown out of the frame provider when Stop is pressed while frames are being grabbed.
+class StopRun extends Error {}
+
 const VIDEO_MISSING_NOTE = "video missing on resume: continued without pictures"
 
 export function createRunner(deps: RunnerDeps): Runner {
@@ -202,9 +206,21 @@ export function createRunner(deps: RunnerDeps): Runner {
         frames,
         onEvent,
       }
-      const result: RunResult = needsBrief
-        ? await runTranslation(input)
-        : await resumeTranslation(toSavedRun(session.saved), input)
+      let result: RunResult
+      try {
+        result = needsBrief
+          ? await runTranslation(input)
+          : await resumeTranslation(toSavedRun(session.saved), input)
+      } catch (error) {
+        if (!(error instanceof StopRun)) {
+          throw error
+        }
+        // Stopped while grabbing frames: the batch never started, finished ones stay.
+        session.phase = "stopped"
+        deps.sessions.save(session)
+        emit({ type: "stopped", sessionId: session.id })
+        return
+      }
       needsBrief = false
       const progressed = result.saved.completedBatches > completed
       completed = result.saved.completedBatches
@@ -277,7 +293,13 @@ export function createRunner(deps: RunnerDeps): Runner {
         }
         counted(0, missing.length)
         try {
-          const grabbed = await deps.grabFrames(missing, videoPath, session.frameSetting, counted)
+          const grabbed = await deps.grabFrames(
+            missing,
+            videoPath,
+            session.frameSetting,
+            counted,
+            () => stopRequested,
+          )
           for (const [id, bytes] of grabbed.frames) {
             kept.set(id, bytes)
           }
@@ -290,6 +312,9 @@ export function createRunner(deps: RunnerDeps): Runner {
           session.frameNotes.push(VIDEO_MISSING_NOTE)
         }
         session.framesUsed = kept.size
+        if (stopRequested) {
+          throw new StopRun()
+        }
       }
       return kept
     }

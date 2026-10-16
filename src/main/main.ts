@@ -231,11 +231,15 @@ async function grabFrames(
   videoPath: string,
   _setting: "marked" | "every",
   progress: (done: number, total: number) => void,
+  shouldStop: () => boolean,
 ): Promise<{ frames: Map<string, Uint8Array>; notes: string[] }> {
   const frames = new Map<string, Uint8Array>()
   const notes: string[] = []
   const ffmpegPath = ffmpegLocation()
   for (const cue of cues) {
+    if (shouldStop()) {
+      break
+    }
     try {
       const bytes = await grabFrame({
         ffmpegPath,

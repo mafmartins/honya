@@ -245,6 +245,42 @@ describe("createRunner", () => {
     expect(texts).not.toContain("Grabbing frames · 0 of 60")
   })
 
+  it("stops between frames without starting the batch", async () => {
+    const h = harness()
+    let grabbed = 0
+    h.deps.grabFrames = (cues, _video, _setting, progress, shouldStop) => {
+      for (let index = 0; index < cues.length; index += 1) {
+        if (shouldStop()) {
+          break
+        }
+        grabbed += 1
+        progress(grabbed, cues.length)
+      }
+      return Promise.resolve({ frames: new Map(), notes: [] })
+    }
+    const batchPrompts: string[] = []
+    const echo = h.state.complete
+    h.state.complete = (request) => {
+      if (!request.prompt.includes('"frameIds": string[]')) {
+        batchPrompts.push(request.prompt)
+      }
+      return echo(request)
+    }
+    const runner = createRunner(h.deps)
+    h.state.onEmit = (event) => {
+      if (event.type === "activity" && event.text === "Grabbing frames · 3 of 25") {
+        runner.stop()
+      }
+    }
+    const id = await runner.start({ ...REQUEST, frameSetting: "every", videoPath: "/v.mkv" })
+    await runner.idle()
+    expect(grabbed).toBe(3)
+    expect(batchPrompts).toEqual([])
+    expect(h.events.at(-1)).toEqual({ type: "stopped", sessionId: id })
+    expect(h.deps.sessions.load(id)?.phase).toBe("stopped")
+    expect(h.deps.sessions.load(id)?.saved.completedBatches).toBe(0)
+  })
+
   it("reports retries in the activity line", async () => {
     const h = harness()
     h.deps.completerFor = (_provider, onRetry) => {

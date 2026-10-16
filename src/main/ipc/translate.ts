@@ -4,6 +4,7 @@ import type { Variant } from "../../core/library/types"
 import type { Preset, ProviderId } from "../../core/pipeline/types"
 import { isEventIndex, readProposal } from "../../core/review/proposal"
 import type { Proposal } from "../../core/review/review"
+import { refuseWhileRunning } from "../translate/guard"
 import { prepareTranslation } from "../translate/prepare"
 import type { ReviewHandlers } from "../translate/review"
 import type { Runner, TranslateRequest } from "../translate/runner"
@@ -26,14 +27,20 @@ export function registerTranslateIpc(deps: TranslateIpcDeps): void {
     prepareTranslation(text(args, 0), variant(args, 1), deps.readScript),
   )
   handle("honya:translate-start", (args) => runner.start(request(args[0])))
-  handle("honya:translate-resume", (args) => runner.resume(sessionId(args, 0)))
+  handle("honya:translate-resume", (args) => {
+    const id = sessionId(args, 0)
+    refuseWhileRunning(runner, id)
+    return runner.resume(id)
+  })
   handle("honya:translate-stop", () => {
     runner.stop()
     return null
   })
   handle("honya:translate-latest", () => latestUnfinished(sessions))
   handle("honya:translate-discard", (args) => {
-    review.discard(sessionId(args, 0))
+    const id = sessionId(args, 0)
+    refuseWhileRunning(runner, id)
+    review.discard(id)
     return null
   })
   handle("honya:translate-finish", (args) => review.finish(sessionId(args, 0)))

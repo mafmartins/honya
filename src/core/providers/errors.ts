@@ -56,11 +56,14 @@ export function providerError(
       status,
     )
   }
+  const detail = providerDetail(body)
   if (status === 429) {
     return new ProviderError(
       "rate-limit",
       provider,
-      `${name} is rate limiting requests. Try again in a few minutes.`,
+      detail === undefined
+        ? `${name} is rate limiting requests. Try again in a few minutes.`
+        : `${name} is rate limiting requests: ${detail}`,
       status,
     )
   }
@@ -68,12 +71,18 @@ export function providerError(
     return new ProviderError(
       "server",
       provider,
-      `${name} had a server error (${String(status)}). Try again later.`,
+      detail === undefined
+        ? `${name} had a server error (${String(status)}). Try again later.`
+        : `${name} had a server error (${String(status)}): ${detail}`,
       status,
     )
   }
-  const detail = providerDetail(body) ?? `HTTP ${String(status)}`
-  return new ProviderError("request", provider, `${name} refused the request: ${detail}`, status)
+  return new ProviderError(
+    "request",
+    provider,
+    `${name} refused the request: ${detail ?? `HTTP ${String(status)}`}`,
+    status,
+  )
 }
 
 function providerDetail(body: string | null): string | undefined {

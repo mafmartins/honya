@@ -31,7 +31,9 @@ case "$target" in
     binary="ffmpeg.exe"
     ;;
   linux)
-    args+=(--extra-cflags="-I$prefix/include" --extra-ldflags="-L$prefix/lib -static")
+    # musl gives new threads a 128 KB stack, which ffmpeg's demuxer thread overflows
+    # (mpegts logging crashed); musl takes the default thread stack size from this.
+    args+=(--extra-cflags="-I$prefix/include" --extra-ldflags="-L$prefix/lib -static -Wl,-z,stack-size=2097152")
     ;;
   *)
     echo "Unknown target: $target" >&2

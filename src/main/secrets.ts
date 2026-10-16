@@ -13,21 +13,37 @@ export interface SecretFile {
 
 export interface SecretStore {
   setKey(provider: ProviderId, key: string): void
+  removeKey(provider: ProviderId): void
   hasKey(provider: ProviderId): boolean
   getKey(provider: ProviderId): string | null
 }
 
 const PROVIDERS = ["claude", "gpt", "gemini", "mistral"] as const
+const NO_ENCRYPTION = "This system can't encrypt keys, so Honya won't store them."
 
 export function createSecretStore(safeStorage: SecretSafeStorage, file: SecretFile): SecretStore {
   return {
     setKey(provider, key) {
       if (!safeStorage.isEncryptionAvailable()) {
-        return
+        throw new Error(NO_ENCRYPTION)
       }
       const keys = readKeys(safeStorage, file)
       keys[provider] = key
       file.write(safeStorage.encryptString(JSON.stringify(keys)))
+    },
+    removeKey(provider) {
+      if (!safeStorage.isEncryptionAvailable()) {
+        throw new Error(NO_ENCRYPTION)
+      }
+      const keys = readKeys(safeStorage, file)
+      const remaining: Partial<Record<ProviderId, string>> = {}
+      for (const other of PROVIDERS) {
+        const value = keys[other]
+        if (other !== provider && value !== undefined) {
+          remaining[other] = value
+        }
+      }
+      file.write(safeStorage.encryptString(JSON.stringify(remaining)))
     },
     hasKey(provider) {
       if (!safeStorage.isEncryptionAvailable()) {

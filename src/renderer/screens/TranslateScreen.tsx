@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { TranslateEvent, LiveLine, PreparedScript } from "../../shared/api"
+import type { FinishResult, TranslateEvent, LiveLine, PreparedScript } from "../../shared/api"
 import { useReport } from "../action"
 import { errorMessage, useApi } from "../api"
 import type { TranslateTarget } from "../App"
+import { DonePanel } from "../translate/DonePanel"
 import { HaltPanel } from "../translate/HaltPanel"
 import { ReviewPanel } from "../translate/ReviewPanel"
 import { LivePanel, type Progress } from "../translate/LivePanel"
@@ -10,7 +11,7 @@ import { StylesStep } from "../translate/StylesStep"
 
 type NewRequest = Extract<TranslateTarget, { kind: "new" }>["request"]
 
-type Phase = "loading" | "styles" | "empty" | "running" | "halted" | "review" | "finishing"
+type Phase = "loading" | "styles" | "empty" | "running" | "halted" | "review" | "finishing" | "done"
 
 export function TranslateScreen(props: {
   target: TranslateTarget
@@ -37,6 +38,8 @@ export function TranslateScreen(props: {
   const [halt, setHalt] = useState<"stopped" | "failed">("stopped")
   const [stopping, setStopping] = useState(false)
   const [reviewId, setReviewId] = useState<string | null>(null)
+  const [writing, setWriting] = useState(false)
+  const [result, setResult] = useState<FinishResult | null>(null)
   const sessionId = useRef<string | null>(target.kind === "resume" ? target.id : null)
   const early = useRef<TranslateEvent[]>([])
   const apply = useCallback(
@@ -161,6 +164,20 @@ export function TranslateScreen(props: {
     resumeSession(id)
   }
 
+  const finish = (id: string): void => {
+    report(null)
+    setWriting(true)
+    act(async () => {
+      try {
+        const finished = await api.finishTranslation(id)
+        setResult(finished)
+        setPhase("done")
+      } finally {
+        setWriting(false)
+      }
+    })
+  }
+
   return (
     <>
       <header className="card-header">
@@ -218,10 +235,31 @@ export function TranslateScreen(props: {
           sessionId={reviewId}
           onFinish={() => {
             setPhase("finishing")
+            finish(reviewId)
           }}
         />
       ) : null}
-      {phase === "finishing" ? <p>Writing the file…</p> : null}
+      {phase === "finishing" && writing ? <p>Writing the file…</p> : null}
+      {phase === "finishing" && !writing && reviewId !== null ? (
+        <button
+          type="button"
+          className="action"
+          onClick={() => {
+            finish(reviewId)
+          }}
+        >
+          Try again
+        </button>
+      ) : null}
+      {phase === "done" && result !== null && reviewId !== null ? (
+        <DonePanel
+          result={result}
+          onReveal={() => {
+            act(() => api.revealOutput(reviewId))
+          }}
+          onAnother={props.onAnother}
+        />
+      ) : null}
     </>
   )
 }

@@ -325,3 +325,21 @@ progress {
 .proposal label {
   display: block;
 }
+
+.report div {
+  display: flex;
+  gap: 12px;
+  margin: 0 0 4px;
+}
+
+.report dt {
+  flex: 0 0 220px;
+  font-weight: 600;
+}
+
+.report dd {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}

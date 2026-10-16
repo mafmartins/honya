@@ -221,7 +221,7 @@ describe("translate screen", () => {
     act(() => {
       api.emitTranslate({ type: "finished", sessionId: "session-1", openFlags: 2 })
     })
-    expect(await screen.findByText("Writing the file…")).toBeTruthy()
+    expect(await screen.findByText("Done")).toBeTruthy()
   })
 
   it("resumes a target by id and keeps a finished event that comes early", async () => {
@@ -234,7 +234,7 @@ describe("translate screen", () => {
     holder.api = api
     render(<Harness api={api} target={{ kind: "resume", id: "s9" }} />)
     expect(resumeTranslation).toHaveBeenCalledWith("s9")
-    expect(await screen.findByText("Writing the file…")).toBeTruthy()
+    expect(await screen.findByText("Done")).toBeTruthy()
   })
 
   it("shows a prepare error and keeps Back", async () => {

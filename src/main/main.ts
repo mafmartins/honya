@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, safeStorage, shell } from "electron"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { DialogueCue } from "../core/ass/script"
@@ -23,6 +23,7 @@ import { createSecretStore, type SecretStore } from "./secrets"
 import { createReviewHandlers } from "./translate/review"
 import { createRunner, type TranslateEvent } from "./translate/runner"
 import { createSessionStore } from "./translate/session"
+import { logEntry } from "./providerLog"
 
 function boot(): void {
   const secrets = createSecretStore(safeStorage, { read: readKeyFile, write: writeKeyFile })
@@ -197,7 +198,33 @@ async function completeWithProvider(
   if (request.images !== undefined) {
     chat.images = request.images.map((image) => ({ id: image.id, png: image.bytes }))
   }
-  return completeChat(chat)
+  const reply = await completeChat(chat)
+  logReply(
+    logEntry({
+      time: new Date().toISOString(),
+      provider,
+      model: chat.model,
+      tier: request.tier,
+      prompt: request.prompt,
+      reply,
+    }),
+  )
+  return reply
+}
+
+// Unusable or mismatched provider replies go to <userData>/logs/providers.log so a run
+// that falls back to English can be explained. Logging never breaks a translation.
+function logReply(entry: string | null): void {
+  if (entry === null) {
+    return
+  }
+  try {
+    const folder = join(app.getPath("userData"), "logs")
+    mkdirSync(folder, { recursive: true })
+    appendFileSync(join(folder, "providers.log"), `${entry}\n`, "utf8")
+  } catch {
+    // ignore: the log is only a diagnostic
+  }
 }
 
 async function askCheap(

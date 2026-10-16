@@ -9,6 +9,8 @@ import type { ProfileHandlers } from "../ipc/profiles"
 import type { SessionStore, TranslateSession } from "./session"
 
 const MISSING = "That translation no longer exists."
+const NOT_READY = "This translation is not ready for review."
+const NOT_A_LINE = "That line is not part of this translation."
 const NOTE = /\s*\{note: ([^}]*)\}/
 
 export interface ReviewLine {
@@ -84,6 +86,14 @@ export function createReviewHandlers(deps: ReviewDeps): ReviewHandlers {
     return session
   }
 
+  const requireReview = (id: string): TranslateSession => {
+    const session = requireSession(id)
+    if (session.phase !== "review") {
+      throw new Error(NOT_READY)
+    }
+    return session
+  }
+
   const build = (session: TranslateSession): Line[] => {
     const styles = new Set(session.dialogueStyles)
     const results = new Map(session.saved.results)
@@ -151,16 +161,21 @@ export function createReviewHandlers(deps: ReviewDeps): ReviewHandlers {
     }
   }
 
-  const find = (session: TranslateSession, eventIndex: number): Line | undefined =>
-    build(session).find((line) => line.eventIndex === eventIndex)
+  const requireLine = (session: TranslateSession, eventIndex: number): Line => {
+    const line = build(session).find((item) => item.eventIndex === eventIndex)
+    if (line === undefined) {
+      throw new Error(NOT_A_LINE)
+    }
+    return line
+  }
 
   return {
     load(id) {
       return view(requireSession(id))
     },
     accept(id, eventIndex, words) {
-      const session = requireSession(id)
-      const line = find(session, eventIndex)
+      const session = requireReview(id)
+      const line = requireLine(session, eventIndex)
       if (words !== null) {
         withEdit(session, line, eventIndex, words)
       }
@@ -169,7 +184,7 @@ export function createReviewHandlers(deps: ReviewDeps): ReviewHandlers {
       return view(session)
     },
     async check(id, eventIndex, words) {
-      const session = requireSession(id)
+      const session = requireReview(id)
       const lines = build(session)
       const before = lines.find((line) => line.eventIndex === eventIndex)?.words ?? ""
       const drafts: DraftLine[] = lines.map((line) => ({
@@ -192,31 +207,46 @@ export function createReviewHandlers(deps: ReviewDeps): ReviewHandlers {
       return { status: "proposal", proposal }
     },
     confirm(id, eventIndex, words, proposal, applyOthers, ruleTarget) {
-      const session = requireSession(id)
-      const line = find(session, eventIndex)
+      const session = requireReview(id)
+      const line = requireLine(session, eventIndex)
       withEdit(session, line, eventIndex, words)
       if (applyOthers) {
+        const known = new Set(build(session).map((item) => item.eventIndex))
         for (const sibling of proposal.siblings) {
-          session.review.edits[String(sibling.eventIndex)] = sibling.words
+          if (known.has(sibling.eventIndex)) {
+            session.review.edits[String(sibling.eventIndex)] = sibling.words
+          }
         }
       }
       if (ruleTarget !== null && proposal.rule !== null) {
         const rule = proposal.rule
+        let added = false
         if (ruleTarget === "series") {
           const rules = deps.profiles.loadSeriesRules(session.variant, session.seriesId)
-          deps.profiles.saveSeriesRules(session.variant, session.seriesId, [...rules, rule])
+          if (!rules.some((item) => sameRule(item, rule))) {
+            deps.profiles.saveSeriesRules(session.variant, session.seriesId, [...rules, rule])
+            added = true
+          }
         } else {
           const { base } = deps.profiles.loadBase(session.variant)
-          deps.profiles.saveBase({ ...base, rules: [...base.rules, rule] })
+          if (!base.rules.some((item) => sameRule(item, rule))) {
+            deps.profiles.saveBase({ ...base, rules: [...base.rules, rule] })
+            added = true
+          }
         }
-        session.review.rules.push({ target: ruleTarget, rule })
+        const recorded = session.review.rules.some(
+          (item) => item.target === ruleTarget && sameRule(item.rule, rule),
+        )
+        if (added && !recorded) {
+          session.review.rules.push({ target: ruleTarget, rule })
+        }
       }
       closeFlag(session, line, eventIndex)
       deps.sessions.save(session)
       return view(session)
     },
     finish(id) {
-      const session = requireSession(id)
+      const session = requireReview(id)
       const lines = build(session)
       const accepted = new Set(session.review.accepted)
       if (lines.some((line) => line.note !== null && !accepted.has(line.eventIndex))) {
@@ -279,4 +309,13 @@ function splitNote(stored: string): { words: string; note: string | null } {
     return { words: stored, note: null }
   }
   return { words: stored.replace(NOTE, ""), note: match[1] ?? "" }
+}
+
+type ProposedRule = NonNullable<Proposal["rule"]>
+
+function sameRule(a: ProposedRule, b: ProposedRule): boolean {
+  if (a.kind === "prose") {
+    return b.kind === "prose" && a.text === b.text
+  }
+  return b.kind === "glossary" && a.source === b.source && a.pt === b.pt
 }

@@ -233,4 +233,53 @@ describe("review handlers", () => {
     expect(sessions.load(id)).toBeNull()
     expect(() => handlers.load(id)).toThrow("That translation no longer exists.")
   })
+
+  it("refuses accept, check, confirm and finish unless the session is in review", async () => {
+    const { handlers, sessions, id } = setup()
+    const session = sessions.load(id)
+    if (session === null) {
+      throw new Error("seed missing")
+    }
+    sessions.save({ ...session, phase: "stopped" })
+    const message = "This translation is not ready for review."
+    expect(() => handlers.accept(id, 1, null)).toThrow(message)
+    await expect(handlers.check(id, 1, "x")).rejects.toThrow(message)
+    expect(() => handlers.confirm(id, 1, "x", PROPOSAL, false, null)).toThrow(message)
+    expect(() => handlers.finish(id)).toThrow(message)
+  })
+
+  it("refuses a line that is not part of the translation", () => {
+    const { handlers, id } = setup()
+    const message = "That line is not part of this translation."
+    expect(() => handlers.accept(id, 99, "x")).toThrow(message)
+    expect(() => handlers.confirm(id, 99, "x", PROPOSAL, false, null)).toThrow(message)
+  })
+
+  it("confirm skips siblings that are not dialogue lines", () => {
+    const { handlers, id, sessions } = setup()
+    const proposal: Proposal = {
+      siblings: [
+        { eventIndex: 99, words: "Fantasma." },
+        { eventIndex: 2, words: "Os Pilares esperam." },
+      ],
+      rule: null,
+    }
+    handlers.confirm(id, 1, "Os Pilares chegaram.", proposal, true, null)
+    expect(sessions.load(id)?.review.edits).toEqual({
+      "1": "Os Pilares chegaram.",
+      "2": "Os Pilares esperam.",
+    })
+  })
+
+  it("confirm does not save a rule that is already there", () => {
+    const { handlers, id, profiles, seriesId, sessions } = setup()
+    handlers.confirm(id, 1, "Os Pilares chegaram.", PROPOSAL, false, "series")
+    handlers.confirm(id, 1, "Os Pilares chegaram.", PROPOSAL, false, "series")
+    expect(profiles.loadSeriesRules("pt-pt", seriesId)).toEqual([PROPOSAL.rule])
+    expect(sessions.load(id)?.review.rules).toHaveLength(1)
+    handlers.confirm(id, 1, "Os Pilares chegaram.", PROPOSAL, false, "base")
+    handlers.confirm(id, 1, "Os Pilares chegaram.", PROPOSAL, false, "base")
+    expect(profiles.loadBase("pt-pt").base.rules).toEqual([PROPOSAL.rule])
+    expect(sessions.load(id)?.review.rules).toHaveLength(2)
+  })
 })

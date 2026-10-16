@@ -151,4 +151,30 @@ describe("session store", () => {
     }
     expect(toSavedRun(fromSavedRun(saved))).toEqual(saved)
   })
+
+  it("keeps frames on disk with the session and removes them with it", () => {
+    const dir = tempDir()
+    const store = createSessionStore(dir)
+    const saved = session()
+    store.save(saved)
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+    expect(store.readFrame(saved.id, "12")).toBeNull()
+    store.writeFrame(saved.id, "12", png)
+    expect(createSessionStore(dir).readFrame(saved.id, "12")).toEqual(png)
+    store.clearFrames(saved.id)
+    expect(store.readFrame(saved.id, "12")).toBeNull()
+    store.writeFrame(saved.id, "12", png)
+    store.remove(saved.id)
+    expect(store.readFrame(saved.id, "12")).toBeNull()
+    expect(readdirSync(dir)).toEqual([])
+  })
+
+  it("refuses a frame id that is not a line number", () => {
+    const store = createSessionStore(tempDir())
+    const saved = session()
+    expect(() => {
+      store.writeFrame(saved.id, "../x", new Uint8Array([1]))
+    }).toThrow("Invalid frame id.")
+    expect(() => store.readFrame("../keys", "1")).toThrow("Invalid session id.")
+  })
 })

@@ -291,6 +291,7 @@ export function createReviewHandlers(deps: ReviewDeps): ReviewHandlers {
       })
       session.phase = "done"
       deps.sessions.save(session)
+      deps.sessions.clearFrames(id)
       deps.reveal(session.outputPath)
       return { outputPath: session.outputPath, report }
     },

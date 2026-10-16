@@ -283,6 +283,14 @@ export function createRunner(deps: RunnerDeps): Runner {
       if (session.frameSetting === "none" || videoPath === null || videoMissing) {
         return kept
       }
+      for (const id of ids) {
+        if (!kept.has(id) && cueById.has(id)) {
+          const saved = deps.sessions.readFrame(session.id, id)
+          if (saved !== null) {
+            kept.set(id, saved)
+          }
+        }
+      }
       const missing = ids.flatMap((id) => {
         const cue = cueById.get(id)
         return cue === undefined || kept.has(id) ? [] : [cue]
@@ -302,6 +310,7 @@ export function createRunner(deps: RunnerDeps): Runner {
           )
           for (const [id, bytes] of grabbed.frames) {
             kept.set(id, bytes)
+            deps.sessions.writeFrame(session.id, id, bytes)
           }
           session.frameNotes.push(...grabbed.notes)
         } catch (error) {

@@ -213,6 +213,26 @@ describe("review handlers", () => {
     expect(fixture.sessions.load(fixture.id)?.phase).toBe("done")
   })
 
+  it("deletes the session's saved frames once the file is written", () => {
+    const { handlers, sessions, id } = setup()
+    sessions.writeFrame(id, "1", new Uint8Array([1]))
+    handlers.accept(id, 1, null)
+    handlers.finish(id)
+    expect(sessions.readFrame(id, "1")).toBeNull()
+  })
+
+  it("keeps the saved frames when the file can't be written", () => {
+    const { handlers, sessions, id } = setup({
+      writeFile: () => {
+        throw new Error("EACCES")
+      },
+    })
+    sessions.writeFrame(id, "1", new Uint8Array([1]))
+    handlers.accept(id, 1, null)
+    expect(() => handlers.finish(id)).toThrow()
+    expect(sessions.readFrame(id, "1")).toEqual(new Uint8Array([1]))
+  })
+
   it("finishes, writes notes back, reveals the file and reports", () => {
     const writeFile = vi.fn<(path: string, text: string) => void>()
     const reveal = vi.fn<(path: string) => void>()

@@ -73,6 +73,10 @@ export interface SessionStore {
   load(id: string): TranslateSession | null
   latestUnfinished(): TranslateSession | null
   remove(id: string): void
+  // Grabbed frames live in <dir>/<id>/frames/<line>.png so a resumed run reuses them.
+  readFrame(id: string, line: string): Uint8Array | null
+  writeFrame(id: string, line: string, png: Uint8Array): void
+  clearFrames(id: string): void
 }
 
 export interface SessionFileOps {
@@ -91,6 +95,19 @@ export function createSessionStore(dir: string, ops: SessionFileOps = DEFAULT_OP
       throw new Error("Invalid session id.")
     }
     return join(dir, `${id}.json`)
+  }
+
+  const framesDir = (id: string): string => {
+    pathFor(id)
+    return join(dir, id, "frames")
+  }
+
+  const framePath = (id: string, line: string): string => {
+    const folder = framesDir(id)
+    if (!/^\d+$/.test(line)) {
+      throw new Error("Invalid frame id.")
+    }
+    return join(folder, `${line}.png`)
   }
 
   const readSession = (path: string): TranslateSession | null => {
@@ -140,6 +157,19 @@ export function createSessionStore(dir: string, ops: SessionFileOps = DEFAULT_OP
     },
     remove(id) {
       rmSync(pathFor(id), { force: true })
+      rmSync(join(dir, id), { recursive: true, force: true })
+    },
+    readFrame(id, line) {
+      const path = framePath(id, line)
+      return existsSync(path) ? new Uint8Array(readFileSync(path)) : null
+    },
+    writeFrame(id, line, png) {
+      const path = framePath(id, line)
+      mkdirSync(framesDir(id), { recursive: true })
+      writeFileSync(path, png)
+    },
+    clearFrames(id) {
+      rmSync(join(dir, id), { recursive: true, force: true })
     },
   }
 }

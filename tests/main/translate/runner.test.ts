@@ -281,6 +281,37 @@ describe("createRunner", () => {
     expect(h.deps.sessions.load(id)?.saved.completedBatches).toBe(0)
   })
 
+  it("reuses frames saved before a stop when the run resumes", async () => {
+    const h = harness()
+    const asked: number[] = []
+    h.deps.grabFrames = (cues, _video, _setting, progress, shouldStop) => {
+      asked.push(cues.length)
+      const frames = new Map<string, Uint8Array>()
+      for (const cue of cues) {
+        if (shouldStop()) {
+          break
+        }
+        frames.set(String(cue.index), new Uint8Array([7]))
+        progress(frames.size, cues.length)
+      }
+      return Promise.resolve({ frames, notes: [] })
+    }
+    const runner = createRunner(h.deps)
+    h.state.onEmit = (event) => {
+      if (event.type === "activity" && event.text === "Grabbing frames · 3 of 25") {
+        runner.stop()
+      }
+    }
+    const id = await runner.start({ ...REQUEST, frameSetting: "every", videoPath: "/v.mkv" })
+    await runner.idle()
+    expect(h.deps.sessions.readFrame(id, "0")).toEqual(new Uint8Array([7]))
+    h.state.onEmit = () => undefined
+    await runner.resume(id)
+    await runner.idle()
+    expect(asked).toEqual([25, 22, 25, 10])
+    expect(h.events.at(-1)?.type).toBe("finished")
+  })
+
   it("reports retries in the activity line", async () => {
     const h = harness()
     h.deps.completerFor = (_provider, onRetry) => {

@@ -1,4 +1,5 @@
 import type { LineResult, ProviderId } from "../pipeline/types"
+import { providerError } from "./errors"
 
 export interface ChatInput {
   provider: ProviderId
@@ -82,21 +83,47 @@ const JSON_INSTRUCTION =
 const CLAUDE_MAX_TOKENS = 8192
 
 export async function completeChat(input: ChatInput): Promise<ChatReply> {
-  const request = buildRequest(input)
-  const response = await input.fetch(request.url, {
-    method: "POST",
-    headers: request.headers,
-    body: JSON.stringify(request.body),
-  })
-  if (response.status !== 200) {
-    return { refused: true }
-  }
-  return readChatBody(await response.text())
+  const body = await send(input, buildRequest(input, true))
+  return readChatBody(body)
 }
 
-function buildRequest(input: ChatInput): ProviderRequest {
+export async function completeText(
+  input: ChatInput,
+): Promise<{ text: string } | { refused: true }> {
+  const body = await send(input, buildRequest(input, false))
+  const parsed = parseJson(body)
+  if (!isRecord(parsed)) {
+    return { refused: true }
+  }
+  const text = assistantText(parsed)
+  if (text === undefined) {
+    return { refused: true }
+  }
+  return { text }
+}
+
+async function send(input: ChatInput, request: ProviderRequest): Promise<string> {
+  let response: Response
+  let text: string
+  try {
+    response = await input.fetch(request.url, {
+      method: "POST",
+      headers: request.headers,
+      body: JSON.stringify(request.body),
+    })
+    text = await response.text()
+  } catch {
+    throw providerError(input.provider, null, null)
+  }
+  if (response.status !== 200) {
+    throw providerError(input.provider, response.status, text)
+  }
+  return text
+}
+
+function buildRequest(input: ChatInput, lines: boolean): ProviderRequest {
   const images = input.images ?? []
-  const text = instructed(input.prompt)
+  const text = lines ? instructed(input.prompt) : input.prompt
   switch (input.provider) {
     case "claude":
       return {

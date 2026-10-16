@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { completeChat } from "../../src/core/providers/complete"
+import { completeChat, completeText } from "../../src/core/providers/complete"
 import { defaultModels } from "../../src/core/providers/models"
 
 describe("completeChat", () => {
@@ -54,10 +54,40 @@ describe("completeChat", () => {
     expect(result).toEqual({ lines: [{ id: "0", words: "Olá.", mark: "clean" }] })
   })
 
-  it("treats a non-200 response as a refusal", async () => {
+  it("throws a ProviderError on a non-200 reply", async () => {
     const fetchImpl: typeof fetch = async () => {
       await Promise.resolve()
-      return new Response("no", { status: 429 })
+      return new Response("no", { status: 401 })
+    }
+    const input = {
+      provider: "gpt" as const,
+      model: defaultModels("gpt").strong,
+      apiKey: "secret",
+      prompt: "0: Hello.",
+      fetch: fetchImpl,
+    }
+    await expect(completeChat(input)).rejects.toMatchObject({ kind: "auth" })
+  })
+
+  it("throws a network ProviderError when fetch rejects", async () => {
+    const fetchImpl: typeof fetch = async () => {
+      await Promise.resolve()
+      throw new TypeError("fetch failed")
+    }
+    const input = {
+      provider: "claude" as const,
+      model: defaultModels("claude").cheap,
+      apiKey: "secret",
+      prompt: "0: Hello.",
+      fetch: fetchImpl,
+    }
+    await expect(completeChat(input)).rejects.toMatchObject({ kind: "network" })
+  })
+
+  it("still returns refused for unreadable content", async () => {
+    const fetchImpl: typeof fetch = async () => {
+      await Promise.resolve()
+      return new Response("nope", { status: 200 })
     }
     const result = await completeChat({
       provider: "gpt",
@@ -67,5 +97,26 @@ describe("completeChat", () => {
       fetch: fetchImpl,
     })
     expect(result).toEqual({ refused: true })
+  })
+
+  it("completeText returns the assistant text without the lines instruction", async () => {
+    let body = ""
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      await Promise.resolve()
+      body = typeof init?.body === "string" ? init.body : ""
+      return new Response(JSON.stringify({ content: [{ type: "text", text: "hello" }] }), {
+        status: 200,
+      })
+    }
+    const result = await completeText({
+      provider: "claude",
+      model: defaultModels("claude").cheap,
+      apiKey: "secret",
+      prompt: "Translate: Hi.",
+      fetch: fetchImpl,
+    })
+    expect(body).not.toContain("lines")
+    expect(body).toContain("Translate: Hi.")
+    expect(result).toEqual({ text: "hello" })
   })
 })

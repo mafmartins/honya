@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { App } from "../../src/renderer/App"
 import type { SeriesList, Variant } from "../../src/shared/api"
 import { fakeApi } from "./fakeApi"
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
 })
 
 describe("start screen", () => {
@@ -136,5 +137,36 @@ describe("start screen", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Back" }))
     const preset = await screen.findByLabelText("preset")
     expect(preset instanceof HTMLSelectElement && preset.value).toBe("best")
+  })
+
+  it("forgets a series deleted on the profiles screen", async () => {
+    const frieren = { id: "x", name: "Frieren", ruleCount: 0 }
+    let items = [frieren]
+    const api = fakeApi({
+      listSeries: () => Promise.resolve({ series: items, problems: [] }),
+      deleteSeries: () => {
+        items = []
+        return Promise.resolve()
+      },
+    })
+    render(<App api={api} />)
+    fireEvent.change(await screen.findByLabelText("series"), { target: { value: "x" } })
+    fireEvent.click(screen.getByRole("button", { name: "Profiles" }))
+    vi.spyOn(window, "confirm").mockReturnValue(true)
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Frieren" }))
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Delete Frieren" })).toBeNull()
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Back" }))
+    await waitFor(() => {
+      expect(screen.queryByRole("option", { name: "Frieren" })).toBeNull()
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    items = [frieren]
+    fireEvent.click(screen.getByRole("button", { name: "Profiles" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Back" }))
+    expect(await screen.findByRole("option", { name: "Frieren" })).toBeTruthy()
+    const select = screen.getByLabelText("series")
+    expect(select instanceof HTMLSelectElement && select.value).toBe("")
   })
 })

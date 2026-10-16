@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useEffectEvent, useState } from "react"
 import type { SeriesSummary, Variant } from "../../shared/api"
 import { useAction, useReport } from "../action"
 import { errorMessage, useApi } from "../api"
@@ -18,6 +18,12 @@ export function SeriesPicker(props: {
   const [name, setName] = useState("")
   const [reload, setReload] = useState(0)
 
+  const forgetMissing = useEffectEvent((list: SeriesSummary[]): void => {
+    if (props.seriesId !== null && !list.some((item) => item.id === props.seriesId)) {
+      props.onSelect(null)
+    }
+  })
+
   useEffect(() => {
     let current = true
     api.listSeries(props.variant).then(
@@ -26,6 +32,7 @@ export function SeriesPicker(props: {
           return
         }
         setSeries(list.series)
+        forgetMissing(list.series)
         if (list.problems.length > 0) {
           report(list.problems.join(" "))
         }

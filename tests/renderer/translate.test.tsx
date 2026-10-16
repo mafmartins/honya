@@ -152,6 +152,19 @@ describe("translate screen", () => {
     expect(screen.getByText("{note: linha longa}").className).toBe("note")
   })
 
+  it("puts the english and the portuguese side by side in one row", async () => {
+    const api = fakeApi()
+    render(<Harness api={api} target={NEW_TARGET} />)
+    await screen.findByRole("button", { name: "Stop" })
+    act(() => {
+      api.emitTranslate(batch("session-1"))
+    })
+    const english = screen.getByText("Hello")
+    const words = screen.getByText("Olá")
+    expect(english.parentElement?.tagName).toBe("LI")
+    expect(english.parentElement).toBe(words.parentElement)
+  })
+
   it("shows an event emitted before startTranslation resolves", async () => {
     const holder: { api: ReturnType<typeof fakeApi> | null } = { api: null }
     const api = fakeApi({

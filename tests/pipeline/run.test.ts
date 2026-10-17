@@ -130,6 +130,58 @@ describe("runTranslation", () => {
     expect(result.ass).toContain("Line 0. {note: tradução falhou}")
   })
 
+  it("asks the cheap model to fix only the lines with a brazilian form", async () => {
+    const events: RunEvent[] = []
+    const { complete, requests } = model((ids, request) =>
+      request.prompt.includes("These drafts break a rule")
+        ? lines(ids, "Raios")
+        : {
+            lines: ids.map((id) => ({
+              id,
+              text: id === "1" ? "Droga!" : `pt ${id}`,
+              mark: "clean",
+              note: "",
+            })),
+            terms: [],
+          },
+    )
+    const result = await runTranslation({
+      ...baseInput(3),
+      complete,
+      onEvent: (event) => events.push(event),
+    })
+    const fix = requests.find((r) => r.prompt.includes("These drafts break a rule"))
+    expect(fix === undefined ? [] : requestedIds(fix.prompt)).toEqual(["1"])
+    expect(fix?.prompt).toContain('=> Droga!; "Droga!" is Brazilian')
+    expect(events).toContainEqual({ type: "fix", count: 1 })
+    expect(result.ass).toContain("Raios 1")
+    expect(result.ass).not.toContain("{note:")
+  })
+
+  it("keeps the draft with a note when the fix doesn't clear the problem", async () => {
+    const { complete } = model((ids) => ({
+      lines: ids.map((id) => ({ id, text: "Droga!", mark: "clean", note: "" })),
+      terms: [],
+    }))
+    const result = await runTranslation({ ...baseInput(1), complete })
+    expect(result.ass).toContain("Droga! {note: forma brasileira}")
+  })
+
+  it("enforces the profile's glossary rules", async () => {
+    const { complete, requests } = model((ids, request) =>
+      request.prompt.includes("These drafts break a rule") ? lines(ids, "Pilar") : lines(ids),
+    )
+    await runTranslation({
+      ...baseInput(2),
+      ass: scriptWith(2).replace("Line 1.", "Line 1, a Hashira."),
+      card: { ...card, rules: [{ kind: "glossary", source: "Hashira", pt: "Pilar" }] },
+      complete,
+    })
+    const fix = requests.find((r) => r.prompt.includes("These drafts break a rule"))
+    expect(fix?.prompt).toContain('"Hashira" must be translated as "Pilar"')
+    expect(fix === undefined ? [] : requestedIds(fix.prompt)).toEqual(["1"])
+  })
+
   it("treats an unknown mark as a doubt", async () => {
     const { complete, requests } = model((ids) => lines(ids, "pt", "good"))
     await runTranslation({ ...baseInput(2), complete })

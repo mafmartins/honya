@@ -36,6 +36,43 @@ const CONVENTIONS: Record<Variant, string> = {
   ].join("\n"),
 }
 
+// Short lines carry no context, so they are where the other variant slips in. These
+// pairs show the expected form for the usual suspects.
+const EXAMPLES: Record<Variant, readonly [string, string][]> = {
+  "pt-pt": [
+    ["Damn it!", "Raios!"],
+    ["Come here!", "Anda cá!"],
+    ["What are you doing?", "O que estás a fazer?"],
+    ["Tell me.", "Diz-me."],
+    ["Cool!", "Fixe!"],
+    ["Wow!", "Caramba!"],
+    ["Hey, man.", "Ei, pá."],
+    ["Shut up!", "Cala-te!"],
+    ["Seriously?", "A sério?"],
+    ["Okay, okay.", "Está bem, está bem."],
+    ["Hi!", "Olá!"],
+    ["The kids are waiting.", "Os miúdos estão à espera."],
+    ["Breakfast is ready.", "O pequeno-almoço está pronto."],
+    ["I'll call you on your phone.", "Ligo-te para o telemóvel."],
+  ],
+  "pt-br": [
+    ["Damn it!", "Droga!"],
+    ["Come here!", "Vem cá!"],
+    ["What are you doing?", "O que você está fazendo?"],
+    ["Tell me.", "Me diz."],
+    ["Cool!", "Legal!"],
+    ["Wow!", "Nossa!"],
+    ["Hey, man.", "Ei, cara."],
+    ["Shut up!", "Cala a boca!"],
+    ["Seriously?", "Sério?"],
+    ["Okay, okay.", "Tá bom, tá bom."],
+    ["Hi!", "Oi!"],
+    ["The kids are waiting.", "As crianças estão esperando."],
+    ["Breakfast is ready.", "O café da manhã está pronto."],
+    ["I'll call you on your phone.", "Te ligo no celular."],
+  ],
+}
+
 const MARKS = [
   "Mark each line:",
   "- clean: you are confident and it fits the budget.",
@@ -47,8 +84,14 @@ const MARKS = [
 
 export function translatorSystem(card: StyleCard, brief: string): string {
   const language = LANGUAGE[card.variant]
-  const parts = [
-    `You translate subtitle dialogue from English into ${language} for a fansub.`,
+  const parts = [`You translate subtitle dialogue from English into ${language} for a fansub.`]
+  const rules = card.rules.map(ruleLine)
+  if (rules.length > 0) {
+    parts.push(
+      `The translator's rules. Always follow them; they override everything below:\n${rules.map((r) => `- ${r}`).join("\n")}`,
+    )
+  }
+  parts.push(
     [
       `Write natural, spoken ${language} that a native viewer expects from a good subtitle: idiomatic, not word for word.`,
       "Keep the meaning, tone, register and humour, and each speaker's way of talking.",
@@ -58,16 +101,11 @@ export function translatorSystem(card: StyleCard, brief: string): string {
       "Line breaks: where the English has \\N, put one \\N at the natural place in your translation, written as a backslash and a capital N (never a newline). Add none where the English has none.",
     ].join("\n"),
     CONVENTIONS[card.variant],
+    `Short lines are where the wrong variant slips in. For example:\n${EXAMPLES[card.variant].map(([en, pt]) => `${en} => ${pt}`).join("\n")}`,
     MARKS,
     "terms: names, places, techniques and recurring phrases you gave a fixed Portuguese form in this reply and that are not in the glossary yet; [] if none.",
     "Return one entry per requested id, with the same ids, and nothing but the JSON.",
-  ]
-  const rules = card.rules.map(ruleLine)
-  if (rules.length > 0) {
-    parts.push(
-      `House rules (follow them over anything above):\n${rules.map((r) => `- ${r}`).join("\n")}`,
-    )
-  }
+  )
   const voice = voiceSample(card.voice)
   if (voice !== "") {
     parts.push(`Lines from the translator's earlier work, to match their voice:\n${voice}`)
@@ -123,6 +161,28 @@ export function escalationPrompt(
   )
   parts.push(
     `Give your own translation of only these lines, fixing what the first pass got wrong:\n${flagged.map((f) => `[${String(f.cue.index)}] ${f.why}`).join("\n")}`,
+  )
+  return parts.join("\n\n")
+}
+
+export function fixPrompt(
+  items: readonly { cue: DialogueCue; draft: string; problems: readonly string[] }[],
+  glossary: readonly Term[],
+  cpsLimit: number,
+): string {
+  const parts: string[] = []
+  if (glossary.length > 0) {
+    parts.push(
+      `Glossary (use these forms):\n${glossary.map((t) => `${t.source} = ${t.pt}`).join("\n")}`,
+    )
+  }
+  parts.push(
+    "These drafts break a rule. Rewrite each one so the problem is gone, keeping its meaning, budget and line breaks.",
+  )
+  parts.push(
+    `Each is [id] (speaker, budget) English => draft; problem:\n${items
+      .map((item) => `${cueLine(item.cue, cpsLimit)} => ${item.draft}; ${item.problems.join("; ")}`)
+      .join("\n")}`,
   )
   return parts.join("\n\n")
 }

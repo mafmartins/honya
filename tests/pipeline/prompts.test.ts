@@ -34,6 +34,13 @@ describe("translator instructions", () => {
     expect(br).toContain("The gerund")
   })
 
+  it("put the translator's rules first and show the variant's short-line forms", () => {
+    const pt = translatorSystem({ ...card, rules: [{ kind: "prose", text: "Keep -san." }] }, "")
+    expect(pt.indexOf("The translator's rules")).toBeLessThan(pt.indexOf("Write natural"))
+    expect(pt).toContain("Damn it! => Raios!")
+    expect(translatorSystem({ ...card, variant: "pt-br" }, "")).toContain("Damn it! => Droga!")
+  })
+
   it("explain the marks the reply may use", () => {
     const system = translatorSystem(card, "")
     for (const mark of ["- clean:", "- mild:", "- hard-call:", "- doubt:"]) {

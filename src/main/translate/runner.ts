@@ -196,6 +196,9 @@ export function createRunner(deps: RunnerDeps): Runner {
         case "escalate":
           activity(session, `Asking the strong model about ${String(event.count)} lines`)
           break
+        case "fix":
+          activity(session, `Fixing ${String(event.count)} lines that break a rule`)
+          break
         case "batch-done":
           batchDone.value = { index: event.index, total: event.total, lines: event.lines }
           break

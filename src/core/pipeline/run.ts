@@ -5,12 +5,14 @@ import { applyTranslations } from "../ass/write"
 import type { StyleCard } from "../library/types"
 import { addGlossary, chunkDialogue, emptyGlossary, type Glossary } from "./batch"
 import { escalationIds } from "./escalate"
+import { lineProblems, type LineProblem } from "./lint"
 import {
   batchPrompt,
   briefPrompt,
   briefSystem,
   charBudget,
   escalationPrompt,
+  fixPrompt,
   translatorSystem,
 } from "./prompts"
 import { readBriefReply, readLinesReply, type Term } from "./replies"
@@ -23,6 +25,8 @@ export type RunEvent =
   | { type: "brief" }
   | { type: "batch"; index: number; total: number }
   | { type: "escalate"; count: number }
+  // Lines sent back to the cheap model to fix a variant form or a glossary rule.
+  | { type: "fix"; count: number }
   | { type: "batch-done"; index: number; total: number; lines: LineResult[] }
   // A reply that couldn't be used, in whole or in part; worth logging.
   | { type: "problem"; tier: "cheap" | "strong"; reason: string; excerpt?: string }
@@ -259,6 +263,36 @@ async function translateChunk(
   }
   let nextGlossary = addGlossary(glossary, cheap.terms)
 
+  // Drafts that use the other variant's forms or break a glossary rule get one small
+  // cheap request to fix just those lines; a fix is kept only if it clears the problem.
+  const broken = chunk.flatMap((cue) => {
+    const line = cheap.lines.get(String(cue.index))
+    if (line === undefined) {
+      return []
+    }
+    const problems = problemsOf(input, cue, line.words)
+    return problems.length === 0
+      ? []
+      : [{ cue, draft: line.words, problems: problems.map((p) => p.problem) }]
+  })
+  if (broken.length > 0) {
+    input.onEvent?.({ type: "fix", count: broken.length })
+    const fixed = await ask(
+      context,
+      "cheap",
+      broken.map((item) => item.cue),
+      () => fixPrompt(broken, nextGlossary.entries, cps),
+    )
+    for (const item of broken) {
+      const id = String(item.cue.index)
+      const line = fixed.lines.get(id)
+      if (line !== undefined && problemsOf(input, item.cue, line.words).length === 0) {
+        cheap.lines.set(id, line)
+      }
+    }
+    nextGlossary = addGlossary(nextGlossary, fixed.terms)
+  }
+
   // Lines the preset sends to the strong model; a line the cheap pass never returned
   // counts as a doubt.
   const signals: LineSignals[] = chunk.map((cue) => {
@@ -294,7 +328,7 @@ async function translateChunk(
     const id = String(cue.index)
     // A strong answer wins; without one, the cheap draft (with its note) beats English.
     const line = (selected.has(id) ? strong.lines.get(id) : undefined) ?? cheap.lines.get(id)
-    return line === undefined ? englishFailure(cue) : finishLine(line, cue, cps)
+    return line === undefined ? englishFailure(cue) : finishLine(line, cue, cps, input)
   })
   return {
     lines,
@@ -370,12 +404,32 @@ function flaggedBecause(
   return `${reasons.join("; ") || "worth a second look"}${note}`
 }
 
-function finishLine(line: LineResult, cue: DialogueCue, cpsLimit: number): LineResult {
+function finishLine(
+  line: LineResult,
+  cue: DialogueCue,
+  cpsLimit: number,
+  input: RunInput,
+): LineResult {
   const unfit = lineUnfit(line.words, cue, cpsLimit)
+  // A problem the fix request couldn't clear always shows in review.
+  const problems = problemsOf(input, cue, line.words)
+  if (problems.length > 0) {
+    const reasons = [...new Set(problems.map((p) => p.note))]
+    if (line.reason !== undefined) {
+      reasons.push(line.reason)
+    }
+    const flagged: LineResult = { ...line, mark: line.mark === "clean" ? "mild" : line.mark }
+    flagged.reason = reasons.join("; ")
+    return copyLine(flagged, appendNote(line.words, flagged.reason))
+  }
   if (line.mark === "clean" && !unfit) {
     return copyLine(line, line.words)
   }
   return copyLine(line, appendNote(line.words, noteReason(line)))
+}
+
+function problemsOf(input: RunInput, cue: DialogueCue, words: string): LineProblem[] {
+  return lineProblems(cue.visible, words, input.card.variant, input.card.rules)
 }
 
 function noteReason(line: LineResult): string {

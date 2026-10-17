@@ -81,6 +81,9 @@ export interface WorkSessions {
   view(id: string): SessionView
   get(id: string): WorkSession
   save(session: WorkSession): void
+  // A session's lines as the renderer shows them, all or only the given indexes.
+  lineViews(session: WorkSession, indexes?: readonly number[]): LineView[]
+  card(projectId: string): StyleCard
   edit(id: string, index: number, words: string): LineView
   accept(id: string, index: number): LineView
   setOptions(id: string, patch: { provider?: ProviderId; preset?: Preset }): SessionView
@@ -214,10 +217,13 @@ export function createWorkSessions(
         .map((cue) => [cue.index, cue]),
     )
 
-  const lineViews = (session: WorkSession): LineView[] => {
+  const lineViews = (session: WorkSession, indexes?: readonly number[]): LineView[] => {
     const cues = cuesOf(session)
     const { cpsLimit } = deps.card(session.projectId)
-    return session.lines.map((line) => {
+    const wanted = indexes === undefined ? null : new Set(indexes)
+    const lines =
+      wanted === null ? session.lines : session.lines.filter((line) => wanted.has(line.index))
+    return lines.map((line) => {
       const cue = cues.get(line.index)
       const english = cue?.visible ?? ""
       return {
@@ -234,7 +240,7 @@ export function createWorkSessions(
   }
 
   const lineView = (session: WorkSession, index: number): LineView => {
-    const found = lineViews(session).find((line) => line.index === index)
+    const found = lineViews(session, [index])[0]
     if (found === undefined) {
       throw new Error("This line is not in the session.")
     }
@@ -389,6 +395,8 @@ export function createWorkSessions(
     view: (id) => viewOf(get(id)),
     get,
     save,
+    lineViews,
+    card: (projectId) => deps.card(projectId),
     edit(id, index, words) {
       const session = get(id)
       lineView(session, index)

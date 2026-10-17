@@ -306,4 +306,18 @@ describe("work sessions", () => {
       "This session already has a script.",
     )
   })
+
+  it("maps chosen lines of a session to line views and hands out the project card", () => {
+    const { store, files } = setup()
+    files.set("/x/ep1.ass", SCRIPT)
+    const id = store.create("p1")
+    store.loadScript(id, "/x/ep1.ass")
+    store.edit(id, 1, "Adeus.")
+    const session = store.get(id)
+    expect(store.lineViews(session).map((line) => line.index)).toEqual([0, 1])
+    const [only] = store.lineViews(session, [1])
+    expect(store.lineViews(session, [1])).toHaveLength(1)
+    expect(only).toMatchObject({ index: 1, english: "Goodbye.", words: "Adeus.", origin: "manual" })
+    expect(store.card("p1")).toBe(CARD)
+  })
 })

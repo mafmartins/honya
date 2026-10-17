@@ -1,0 +1,458 @@
+import { randomUUID } from "node:crypto"
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { basename, join } from "node:path"
+import { classifyScript } from "../../core/ass/classify"
+import { charLimit } from "../../core/ass/fit"
+import { readAss, type DialogueCue } from "../../core/ass/script"
+import { isRecord } from "../../core/library/guards"
+import type { FrameSetting, StyleCard, Variant } from "../../core/library/types"
+import type { Preset, ProviderId } from "../../core/pipeline/types"
+import { acceptLine, editLine, emptyLines, isFinished } from "../../core/session/lines"
+import { migrateV2 } from "../../core/session/migrate"
+import { sessionStats, type SessionStats } from "../../core/session/stats"
+import type { LineOrigin, WorkSession } from "../../core/session/types"
+import type { ListedStyle } from "../ipc/files"
+import type { AppSettings } from "../settingsStore"
+
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export interface SessionSummary {
+  id: string
+  projectId: string
+  projectName: string
+  scriptName: string
+  translated: number
+  total: number
+  openFlags: number
+  updatedAt: string
+  finished: boolean
+}
+
+export interface LineView {
+  index: number
+  start: number
+  speaker: string
+  english: string
+  words: string | null
+  origin: LineOrigin | null
+  flag: string | null
+  budget: number
+}
+
+export interface SessionView {
+  id: string
+  projectId: string
+  projectName: string
+  variant: Variant
+  scriptName: string | null
+  videoName: string | null
+  provider: ProviderId
+  preset: Preset
+  lines: LineView[]
+  needsStyles: ListedStyle[] | null
+  stats: SessionStats
+  finished: boolean
+}
+
+export interface WorkSessionDeps {
+  now(): number
+  newId(): string
+  projectName(id: string): string
+  card(projectId: string): StyleCard
+  readScript(path: string): string
+  settings(): AppSettings
+  project(id: string): { preset: Preset; frameSetting: FrameSetting; variant: Variant }
+}
+
+export interface WorkSessions {
+  migrate(): { migrated: number; skipped: string[] }
+  create(projectId: string): string
+  loadScript(id: string, path: string): SessionView
+  confirmStyles(id: string, dialogueStyles: string[]): SessionView
+  view(id: string): SessionView
+  get(id: string): WorkSession
+  save(session: WorkSession): void
+  edit(id: string, index: number, words: string): LineView
+  accept(id: string, index: number): LineView
+  setOptions(id: string, patch: { provider?: ProviderId; preset?: Preset }): SessionView
+  attachVideo(id: string, path: string | null): SessionView
+  setFinished(id: string, value: boolean | null): SessionSummary
+  remove(id: string): void
+  list(): SessionSummary[]
+  recent(limit: number): SessionSummary[]
+  latestUnfinished(): SessionSummary | null
+  countFor(projectId: string): { count: number; last: string | null }
+  // Grabbed frames live in <dir>/<id>/frames/<line>.png.
+  readFrame(id: string, line: string): Uint8Array | null
+  writeFrame(id: string, line: string, png: Uint8Array): void
+  clearFrames(id: string): void
+}
+
+export function createWorkSessions(dir: string, deps: WorkSessionDeps): WorkSessions {
+  const pathFor = (id: string): string => {
+    if (!SESSION_ID.test(id)) {
+      throw new Error("Invalid session id.")
+    }
+    return join(dir, `${id}.json`)
+  }
+
+  const framesDir = (id: string): string => {
+    pathFor(id)
+    return join(dir, id, "frames")
+  }
+
+  const framePath = (id: string, line: string): string => {
+    const folder = framesDir(id)
+    if (!/^\d+$/.test(line)) {
+      throw new Error("Invalid frame id.")
+    }
+    return join(folder, `${line}.png`)
+  }
+
+  const stamp = (): string => new Date(deps.now()).toISOString()
+
+  const writeAtomic = (path: string, value: WorkSession): string => {
+    mkdirSync(dir, { recursive: true })
+    const temp = `${path}.${randomUUID()}.tmp`
+    try {
+      writeFileSync(temp, JSON.stringify(value, null, 2), "utf8")
+    } catch (error) {
+      rmSync(temp, { force: true })
+      throw error
+    }
+    return temp
+  }
+
+  const save = (session: WorkSession): void => {
+    const path = pathFor(session.id)
+    const temp = writeAtomic(path, { ...session, updatedAt: stamp() })
+    try {
+      renameSync(temp, path)
+    } catch (error) {
+      rmSync(temp, { force: true })
+      throw error
+    }
+  }
+
+  const readFile = (path: string): WorkSession | null => {
+    const parsed = readJson(path)
+    return isWorkSession(parsed) ? parsed : null
+  }
+
+  const get = (id: string): WorkSession => {
+    const path = pathFor(id)
+    const session = existsSync(path) ? readFile(path) : null
+    if (session === null || session.id !== id) {
+      throw new Error("This session was not found.")
+    }
+    return session
+  }
+
+  const all = (): WorkSession[] => {
+    if (!existsSync(dir)) {
+      return []
+    }
+    const sessions: WorkSession[] = []
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith(".json") || file.endsWith(".v2.json")) {
+        continue
+      }
+      const session = readFile(join(dir, file))
+      if (session !== null && `${session.id}.json` === file) {
+        sessions.push(session)
+      }
+    }
+    return sessions
+  }
+
+  const summaryOf = (session: WorkSession): SessionSummary => ({
+    id: session.id,
+    projectId: session.projectId,
+    projectName: deps.projectName(session.projectId),
+    scriptName: session.scriptName,
+    translated: session.lines.filter((line) => line.words !== null).length,
+    total: session.lines.length,
+    openFlags: session.lines.filter((line) => line.flag !== null).length,
+    updatedAt: session.updatedAt,
+    finished: isFinished(session),
+  })
+
+  const newestFirst = (a: SessionSummary, b: SessionSummary): number =>
+    a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0
+
+  const cuesOf = (session: WorkSession): Map<number, DialogueCue> =>
+    new Map(
+      readAss(session.scriptText)
+        .filter((cue) => session.dialogueStyles.includes(cue.style))
+        .map((cue) => [cue.index, cue]),
+    )
+
+  const lineViews = (session: WorkSession): LineView[] => {
+    const cues = cuesOf(session)
+    const { cpsLimit } = deps.card(session.projectId)
+    return session.lines.map((line) => {
+      const cue = cues.get(line.index)
+      const english = cue?.visible ?? ""
+      return {
+        index: line.index,
+        start: cue?.startMs ?? 0,
+        speaker: cue?.name ?? "",
+        english,
+        words: line.words,
+        origin: line.origin,
+        flag: line.flag,
+        budget: cue === undefined ? 0 : charLimit(english, cue.startMs, cue.endMs, cpsLimit),
+      }
+    })
+  }
+
+  const lineView = (session: WorkSession, index: number): LineView => {
+    const found = lineViews(session).find((line) => line.index === index)
+    if (found === undefined) {
+      throw new Error("This line is not in the session.")
+    }
+    return found
+  }
+
+  const stylesToAsk = (session: WorkSession): ListedStyle[] | null => {
+    if (session.scriptText === "" || session.dialogueStyles.length > 0) {
+      return null
+    }
+    return listStyles(session.scriptText)
+  }
+
+  const viewOf = (session: WorkSession): SessionView => ({
+    id: session.id,
+    projectId: session.projectId,
+    projectName: deps.projectName(session.projectId),
+    variant: session.variant,
+    scriptName: session.scriptName === "" ? null : session.scriptName,
+    videoName: session.videoPath === null ? null : basename(session.videoPath),
+    provider: session.provider,
+    preset: session.preset,
+    lines: lineViews(session),
+    needsStyles: stylesToAsk(session),
+    stats: sessionStats(session),
+    finished: isFinished(session),
+  })
+
+  const confirm = (session: WorkSession, styles: string[]): WorkSession => {
+    const cues = readAss(session.scriptText).filter((cue) => styles.includes(cue.style))
+    if (cues.length === 0) {
+      throw new Error("This script has no dialogue lines in the chosen styles.")
+    }
+    return { ...session, dialogueStyles: styles, lines: emptyLines(cues), edits: [] }
+  }
+
+  return {
+    migrate() {
+      let migrated = 0
+      const skipped: string[] = []
+      if (!existsSync(dir)) {
+        return { migrated, skipped }
+      }
+      for (const file of readdirSync(dir)) {
+        if (!file.endsWith(".json") || file.endsWith(".v2.json")) {
+          continue
+        }
+        const path = join(dir, file)
+        const parsed = readJson(path)
+        if (parsed === null) {
+          skipped.push(`${file}: not valid JSON`)
+          continue
+        }
+        if (!isRecord(parsed) || parsed.version !== 2) {
+          continue
+        }
+        const result = migrateV2(parsed)
+        if (typeof result === "string") {
+          skipped.push(`${file}: ${result}`)
+          continue
+        }
+        if (!SESSION_ID.test(result.id) || `${result.id}.json` !== file) {
+          skipped.push(`${file}: the session id does not match the file name`)
+          continue
+        }
+        try {
+          const temp = writeAtomic(path, result)
+          try {
+            renameSync(path, join(dir, `${result.id}.v2.json`))
+            renameSync(temp, path)
+          } catch (error) {
+            rmSync(temp, { force: true })
+            throw error
+          }
+          migrated += 1
+        } catch (error) {
+          skipped.push(`${file}: ${error instanceof Error ? error.message : "could not be saved"}`)
+        }
+      }
+      return { migrated, skipped }
+    },
+    create(projectId) {
+      const id = deps.newId()
+      const project = deps.project(projectId)
+      const at = stamp()
+      save({
+        version: 3,
+        id,
+        projectId,
+        variant: project.variant,
+        createdAt: at,
+        updatedAt: at,
+        scriptPath: "",
+        scriptName: "",
+        scriptText: "",
+        dialogueStyles: [],
+        videoPath: null,
+        provider: deps.settings().defaultProvider,
+        preset: project.preset,
+        frameSetting: project.frameSetting,
+        brief: null,
+        glossary: [],
+        lines: [],
+        edits: [],
+        spend: [],
+        activeMs: 0,
+        framesGrabbed: 0,
+        exportedAt: null,
+        finishedOverride: null,
+      })
+      return id
+    },
+    loadScript(id, path) {
+      const session = get(id)
+      const scriptText = deps.readScript(path)
+      const styles = listStyles(scriptText)
+      const loaded: WorkSession = {
+        ...session,
+        scriptPath: path,
+        scriptName: basename(path),
+        scriptText,
+        dialogueStyles: [],
+        lines: [],
+        edits: [],
+      }
+      const settled = styles.every((style) => style.guess !== "ambiguous")
+        ? confirm(
+            loaded,
+            styles.filter((style) => style.guess === "dialogue").map((style) => style.name),
+          )
+        : loaded
+      save(settled)
+      return viewOf(settled)
+    },
+    confirmStyles(id, dialogueStyles) {
+      const confirmed = confirm(get(id), dialogueStyles)
+      save(confirmed)
+      return viewOf(confirmed)
+    },
+    view: (id) => viewOf(get(id)),
+    get,
+    save,
+    edit(id, index, words) {
+      const session = get(id)
+      lineView(session, index)
+      const next = editLine(session, index, words)
+      save(next)
+      return lineView(next, index)
+    },
+    accept(id, index) {
+      const session = get(id)
+      lineView(session, index)
+      const next = acceptLine(session, index)
+      save(next)
+      return lineView(next, index)
+    },
+    setOptions(id, patch) {
+      const session = get(id)
+      const next: WorkSession = {
+        ...session,
+        provider: patch.provider ?? session.provider,
+        preset: patch.preset ?? session.preset,
+      }
+      save(next)
+      return viewOf(next)
+    },
+    attachVideo(id, path) {
+      const next = { ...get(id), videoPath: path }
+      save(next)
+      return viewOf(next)
+    },
+    setFinished(id, value) {
+      const next = { ...get(id), finishedOverride: value }
+      save(next)
+      return summaryOf(next)
+    },
+    remove(id) {
+      rmSync(pathFor(id), { force: true })
+      rmSync(join(dir, id), { recursive: true, force: true })
+    },
+    list: () => all().map(summaryOf).sort(newestFirst),
+    recent: (limit) => all().map(summaryOf).sort(newestFirst).slice(0, limit),
+    latestUnfinished: () =>
+      all()
+        .map(summaryOf)
+        .filter((summary) => !summary.finished)
+        .sort(newestFirst)[0] ?? null,
+    countFor(projectId) {
+      const mine = all()
+        .filter((session) => session.projectId === projectId)
+        .map(summaryOf)
+        .sort(newestFirst)
+      return { count: mine.length, last: mine[0]?.updatedAt ?? null }
+    },
+    readFrame(id, line) {
+      const path = framePath(id, line)
+      return existsSync(path) ? new Uint8Array(readFileSync(path)) : null
+    },
+    writeFrame(id, line, png) {
+      const path = framePath(id, line)
+      mkdirSync(framesDir(id), { recursive: true })
+      writeFileSync(path, png)
+    },
+    clearFrames(id) {
+      rmSync(join(dir, id), { recursive: true, force: true })
+    },
+  }
+}
+
+function listStyles(scriptText: string): ListedStyle[] {
+  const guesses = classifyScript(readAss(scriptText).map((cue) => cue.style))
+  return [...guesses.entries()].map(([name, guess]) => ({ name, guess }))
+}
+
+function readJson(path: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"))
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+// Version 3 files are only ever written by this store, so the check covers what the
+// store itself reads; the line and edit lists are trusted past their array shape.
+function isWorkSession(value: unknown): value is WorkSession {
+  return (
+    isRecord(value) &&
+    value.version === 3 &&
+    typeof value.id === "string" &&
+    typeof value.projectId === "string" &&
+    typeof value.updatedAt === "string" &&
+    typeof value.scriptText === "string" &&
+    typeof value.scriptName === "string" &&
+    Array.isArray(value.dialogueStyles) &&
+    Array.isArray(value.lines) &&
+    Array.isArray(value.edits) &&
+    Array.isArray(value.spend)
+  )
+}

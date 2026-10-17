@@ -31,11 +31,22 @@ async function openDialog(api: FakeApi, id: string): Promise<HTMLElement> {
 }
 
 describe("export dialog", () => {
-  it("enables Export… only once a script is loaded", async () => {
+  it("offers Export… only once a script is loaded", async () => {
     const api = fakeApi()
     const project = await api.createProject("Empty", "pt-pt")
     const id = await api.newSession(project.id)
-    await api.pickScriptForSession(id)
+    render(
+      <ApiContext.Provider value={api}>
+        <SessionPage sessionId={id} />
+      </ApiContext.Provider>,
+    )
+    await screen.findByText("Load script")
+    expect(screen.queryByRole("button", { name: "Export…" })).toBeNull()
+  })
+
+  it("enables Export… when the session has a script", async () => {
+    const api = fakeApi()
+    const { id } = await translatedSession(api)
     render(
       <ApiContext.Provider value={api}>
         <SessionPage sessionId={id} />
@@ -46,25 +57,39 @@ describe("export dialog", () => {
   })
 
   it("summarises the counts and the default save location", async () => {
-    const api = fakeApi()
+    const api = fakeApi({
+      exportPreview: () =>
+        Promise.resolve({
+          translated: 288,
+          english: 16,
+          openFlags: 6,
+          defaultPath: "/v/a.pt-pt.ass",
+          suggestions: [],
+        }),
+    })
     const { id } = await translatedSession(api)
-    const preview = await api.exportPreview(id)
     const dialog = await openDialog(api, id)
-    await within(dialog).findByText(/translated/)
-    const parts = [`${String(preview.translated)} translated`]
-    if (preview.english > 0) {
-      parts.push(`${String(preview.english)} still in English`)
-    }
-    if (preview.openFlags > 0) {
-      parts.push(
-        `${String(preview.openFlags)} open ${preview.openFlags === 1 ? "flag" : "flags"} will be written as notes`,
-      )
-    }
-    const summary = preview.english === 0 && preview.openFlags === 0 ? null : parts.join(" · ")
-    if (summary !== null) {
-      expect(within(dialog).getByText(summary)).toBeTruthy()
-    }
-    expect(within(dialog).getByText(preview.defaultPath)).toBeTruthy()
+    expect(
+      await within(dialog).findByText(
+        "288 translated · 16 still in English · 6 open flags will be written as notes",
+      ),
+    ).toBeTruthy()
+    expect(within(dialog).getByText("/v/a.pt-pt.ass")).toBeTruthy()
+  })
+
+  it("says what it is doing while the preview loads", async () => {
+    const never = (): Promise<never> => new Promise(() => undefined)
+    const edited = fakeApi({ exportPreview: never })
+    const { id } = await translatedSession(edited)
+    const dialog = await openDialog(edited, id)
+    expect(within(dialog).getByText("Looking at your edits…")).toBeTruthy()
+    cleanup()
+    const plain = fakeApi({ exportPreview: never })
+    const project = await plain.createProject("Plain", "pt-pt")
+    const other = await plain.newSession(project.id)
+    await plain.pickScriptForSession(other)
+    const second = await openDialog(plain, other)
+    expect(within(second).getByText("Getting the export ready…")).toBeTruthy()
   })
 
   it("says all lines are translated when nothing is left", async () => {
@@ -120,7 +145,7 @@ describe("export dialog", () => {
         }),
       exportWrite: write,
     })
-    const { id, projectId } = await translatedSession(api)
+    const { id } = await translatedSession(api)
     const dialog = await openDialog(api, id)
     expect(await within(dialog).findByText("from lines 12, 40")).toBeTruthy()
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Hello → Olá" }))
@@ -135,7 +160,6 @@ describe("export dialog", () => {
         rule: { kind: "prose", text: "Keep it short." },
       },
     ])
-    expect(projectId).not.toBe("")
   })
 
   it("defaults suggestions to the project", async () => {

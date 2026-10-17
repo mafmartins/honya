@@ -35,11 +35,14 @@ function isTarget(value: string): value is Target {
 // to save, then the saved file. The session stays open behind it.
 export function ExportDialog({
   sessionId,
+  edited,
   owner,
   styleOwner,
   onClose,
 }: {
   sessionId: string
+  // Whether you edited lines: the preview then asks the AI for rule suggestions.
+  edited: boolean
   owner: Owner
   styleOwner: Extract<Owner, { kind: "style" }>
   onClose: () => void
@@ -150,7 +153,9 @@ export function ExportDialog({
       <div className="dialog-fields">
         {preview === null ? (
           failure === null ? (
-            <p className="muted">Getting the export ready…</p>
+            <p className="muted">
+              {edited ? "Looking at your edits…" : "Getting the export ready…"}
+            </p>
           ) : null
         ) : (
           <>
@@ -162,7 +167,7 @@ export function ExportDialog({
                   {preview.suggestions.map((suggestion, index) => {
                     const text = formatRule(suggestion.rule)
                     return (
-                      <li key={text} className="export-rule">
+                      <li key={`${String(index)}:${text}`} className="export-rule">
                         <label className="choice">
                           <input
                             type="checkbox"

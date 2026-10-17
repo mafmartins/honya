@@ -5,8 +5,8 @@ import { useApi } from "../../api"
 import { StyleChecklist } from "../../components/StyleChecklist"
 import { PageHeader } from "../PageHeader"
 import { Filters, filterLines, type LineFilter } from "./Filters"
-import { LineList } from "./LineList"
 import { ExportDialog } from "./ExportDialog"
+import { LineList } from "./LineList"
 import { LinePanel } from "./LinePanel"
 import { TopBar } from "./TopBar"
 import {
@@ -170,6 +170,7 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
         {exporting ? (
           <ExportDialog
             sessionId={id}
+            edited={view.lines.some((line) => line.origin === "manual")}
             owner={{ kind: "project", id: view.projectId }}
             styleOwner={{ kind: "style", variant: view.variant }}
             onClose={() => {

@@ -40,6 +40,7 @@ export interface SessionSummary {
 export interface LineView {
   index: number
   start: number
+  end: number
   speaker: string
   english: string
   words: string | null
@@ -229,6 +230,7 @@ export function createWorkSessions(
       return {
         index: line.index,
         start: cue?.startMs ?? 0,
+        end: cue?.endMs ?? 0,
         speaker: cue?.name ?? "",
         english,
         words: line.words,

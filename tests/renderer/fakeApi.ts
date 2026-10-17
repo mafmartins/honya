@@ -206,11 +206,16 @@ export function fakeApi(overrides: Partial<HonyaApi> = {}): FakeApi {
 }
 
 // The script every fake session loads: four dialogue lines.
-export const FAKE_SCRIPT: readonly { start: number; speaker: string; english: string }[] = [
-  { start: 1000, speaker: "Tanjiro", english: "Hello." },
-  { start: 3000, speaker: "Nezuko", english: "Where are we going?" },
-  { start: 5000, speaker: "Tanjiro", english: "Damn it!" },
-  { start: 7000, speaker: "", english: "Run!" },
+export const FAKE_SCRIPT: readonly {
+  start: number
+  end: number
+  speaker: string
+  english: string
+}[] = [
+  { start: 1000, end: 2120, speaker: "Tanjiro", english: "Hello." },
+  { start: 3000, end: 4500, speaker: "Nezuko", english: "Where are we going?" },
+  { start: 5000, end: 6000, speaker: "Tanjiro", english: "Damn it!" },
+  { start: 7000, end: 7800, speaker: "", english: "Run!" },
 ]
 export const FAKE_SCRIPT_NAME = "ep01.ass"
 export const FAKE_SCRIPT_PATH = "/videos/ep01.ass"
@@ -318,6 +323,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
   const lineView = (item: FakeSession["lines"][number]): LineView => ({
     index: item.index,
     start: item.start,
+    end: item.end,
     speaker: item.speaker,
     english: item.english,
     words: item.words,
@@ -635,6 +641,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
         item.lines = FAKE_SCRIPT.map((entry, index) => ({
           index,
           start: entry.start,
+          end: entry.end,
           speaker: entry.speaker,
           english: entry.english,
           words: null,

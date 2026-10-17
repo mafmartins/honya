@@ -18,6 +18,7 @@ import {
 const line = {
   index: 3,
   start: 4200,
+  end: 5320,
   speaker: "Tanjiro",
   english: "Hi.",
   words: "Olá.",
@@ -106,6 +107,7 @@ describe("workspace readers", () => {
     expect(readLineView(line)).toEqual(line)
     expect(readLineView({ ...line, words: 3 })).toBeNull()
     expect(readLineView({ ...line, budget: "18" })).toBeNull()
+    expect(readLineView({ ...line, end: undefined })).toBeNull()
   })
 
   it("accepts a project view and rejects a malformed one", () => {

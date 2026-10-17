@@ -142,8 +142,20 @@ describe("work sessions", () => {
     expect(view.needsStyles).toBeNull()
     expect(view.scriptName).toBe("ep1.ass")
     expect(view.lines).toEqual([
-      expect.objectContaining({ index: 0, start: 1000, speaker: "Ana", english: "Hello there." }),
-      expect.objectContaining({ index: 1, start: 3000, speaker: "", english: "Goodbye." }),
+      expect.objectContaining({
+        index: 0,
+        start: 1000,
+        end: 2000,
+        speaker: "Ana",
+        english: "Hello there.",
+      }),
+      expect.objectContaining({
+        index: 1,
+        start: 3000,
+        end: 4000,
+        speaker: "",
+        english: "Goodbye.",
+      }),
     ])
     expect(view.lines[0]?.budget).toBe(17)
     const line = store.edit(id, 0, "Olá.")

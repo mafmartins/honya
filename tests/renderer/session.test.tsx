@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { useContext, useEffect } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ApiContext } from "../../src/renderer/api"
 import { SessionPage } from "../../src/renderer/workspace/session/SessionPage"
-import { SaveStatusContext, useSaveStatus } from "../../src/renderer/workspace/session/useSession"
 import type { LineView, SessionView } from "../../src/shared/api"
 import { fakeApi, FAKE_SCRIPT, FAKE_SCRIPT_NAME, type FakeApi } from "./fakeApi"
 
@@ -35,6 +33,7 @@ function line(index: number, patch: Partial<LineView> = {}): LineView {
   return {
     index,
     start: index * 1000,
+    end: index * 1000 + 800,
     speaker: "Tanjiro",
     english: `English ${String(index)}`,
     words: null,
@@ -63,6 +62,11 @@ const MIXED: LineView[] = [
 
 function grid(): HTMLElement {
   return screen.getByRole("grid", { name: "Lines" })
+}
+
+// Waits for a row's text in the list (the panel's editor may hold the same words).
+async function shown(text: string): Promise<void> {
+  await within(await screen.findByRole("grid", { name: "Lines" })).findByText(text)
 }
 
 function rows(): HTMLElement[] {
@@ -119,14 +123,14 @@ describe("session page", () => {
     await waitFor(() => {
       expect(confirm).toHaveBeenCalledWith(id, [])
     })
-    expect(await screen.findByText("English 0")).toBeTruthy()
+    await shown("English 0")
   })
 
   it("marks flagged lines and lines you edited", async () => {
     const api = fakeApi()
     const id = await withLines(api, MIXED)
     open(api, id)
-    await screen.findByText("Olá.")
+    await shown("Olá.")
     const [first, second, third] = rows()
     if (first === undefined || second === undefined || third === undefined) {
       throw new Error("Expected three rows.")
@@ -141,7 +145,7 @@ describe("session page", () => {
     const api = fakeApi()
     const id = await withLines(api, MIXED)
     open(api, id)
-    await screen.findByText("Olá.")
+    await shown("Olá.")
     expect(screen.getByRole("button", { name: "All 4" })).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Flagged 1" }))
     expect(rows()).toHaveLength(1)
@@ -238,7 +242,7 @@ describe("session page", () => {
     const api = fakeApi()
     const id = await withLines(api, MIXED)
     open(api, id)
-    await screen.findByText("Olá.")
+    await shown("Olá.")
     act(() => {
       api.emitWorkspace({
         type: "lines",
@@ -285,7 +289,7 @@ describe("session page", () => {
     const api = fakeApi()
     const id = await withLines(api, MIXED)
     open(api, id)
-    await screen.findByText("Olá.")
+    await shown("Olá.")
     const list = grid()
     list.focus()
     expect(rows()[0]?.getAttribute("aria-selected")).toBe("true")
@@ -296,7 +300,7 @@ describe("session page", () => {
     fireEvent.keyDown(list, { key: "ArrowUp" })
     expect(rows()[1]?.getAttribute("aria-selected")).toBe("true")
     expect(
-      within(screen.getByRole("complementary", { name: "Line" })).getByText("Line 2"),
+      within(screen.getByRole("complementary", { name: "Line" })).getByText(/^Line 2 · /),
     ).toBeTruthy()
     fireEvent.click(within(list).getByText("Run!"))
     expect(rows()[3]?.getAttribute("aria-selected")).toBe("true")
@@ -306,7 +310,7 @@ describe("session page", () => {
     const api = fakeApi()
     const id = await withLines(api, MIXED)
     open(api, id)
-    await screen.findByText("Olá.")
+    await shown("Olá.")
     const search = screen.getByRole("searchbox", { name: "Search lines" })
     search.focus()
     fireEvent.keyDown(search, { key: "Escape" })
@@ -318,7 +322,7 @@ describe("session page", () => {
     const many = Array.from({ length: 1000 }, (_, index) => line(index))
     const id = await withLines(api, many)
     open(api, id)
-    await screen.findByText("English 0")
+    await shown("English 0")
     expect(rows().length).toBeLessThan(100)
     expect(screen.queryByText("English 999")).toBeNull()
     const list = grid()
@@ -330,32 +334,42 @@ describe("session page", () => {
     expect(rows().length).toBeLessThan(100)
   })
 
-  it("says Saving… until a marked save settles", async () => {
-    let finish: () => void = () => undefined
-    function Writer(): null {
-      const status = useContext(SaveStatusContext)
-      useEffect(() => {
-        status.markSaving(
-          new Promise<void>((resolve) => {
-            finish = resolve
-          }),
-        )
-      }, [status])
-      return null
-    }
-    function Harness(): React.JSX.Element {
-      const { saving, status } = useSaveStatus()
-      return (
-        <SaveStatusContext.Provider value={status}>
-          <p>{saving ? "Saving…" : "Saved"}</p>
-          <Writer />
-        </SaveStatusContext.Provider>
-      )
-    }
-    render(<Harness />)
+  it("focuses the line's editor on Enter in the list", async () => {
+    const api = fakeApi()
+    const id = await withLines(api, MIXED)
+    open(api, id)
+    await shown("Olá.")
+    const list = grid()
+    list.focus()
+    fireEvent.keyDown(list, { key: "ArrowDown" })
+    fireEvent.keyDown(list, { key: "Enter" })
+    const panel = screen.getByRole("complementary", { name: "Line" })
+    const editor = within(panel).getByRole<HTMLTextAreaElement>("textbox", { name: "Portuguese" })
+    expect(document.activeElement).toBe(editor)
+    expect(editor.value).toBe("Onde vamos?")
+  })
+
+  it("says Saving… in the top bar while an edit is in flight", async () => {
+    const api = fakeApi()
+    const id = await loadedSession(api)
+    const real = api.editLine.bind(api)
+    let release: () => void = () => undefined
+    api.editLine = (session, index, words) =>
+      new Promise((resolve, reject) => {
+        release = () => {
+          real(session, index, words).then(resolve, reject)
+        }
+      })
+    open(api, id)
+    await shown(FAKE_SCRIPT[0]?.english ?? "")
+    expect(screen.getByText("Saved")).toBeTruthy()
+    const panel = screen.getByRole("complementary", { name: "Line" })
+    const editor = within(panel).getByRole("textbox", { name: "Portuguese" })
+    fireEvent.change(editor, { target: { value: "Olá." } })
+    fireEvent.blur(editor)
     expect(await screen.findByText("Saving…")).toBeTruthy()
     act(() => {
-      finish()
+      release()
     })
     expect(await screen.findByText("Saved")).toBeTruthy()
   })

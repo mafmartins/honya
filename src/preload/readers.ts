@@ -748,6 +748,7 @@ export function readLineView(value: unknown): LineView | null {
     !isRecord(value) ||
     !isCount(value.index) ||
     !isCount(value.start) ||
+    !isCount(value.end) ||
     typeof value.speaker !== "string" ||
     typeof value.english !== "string" ||
     !(value.words === null || typeof value.words === "string") ||
@@ -760,6 +761,7 @@ export function readLineView(value: unknown): LineView | null {
   return {
     index: value.index,
     start: value.start,
+    end: value.end,
     speaker: value.speaker,
     english: value.english,
     words: value.words,

@@ -6,6 +6,7 @@ import { StyleChecklist } from "../../components/StyleChecklist"
 import { PageHeader } from "../PageHeader"
 import { Filters, filterLines, type LineFilter } from "./Filters"
 import { LineList } from "./LineList"
+import { LinePanel } from "./LinePanel"
 import { TopBar } from "./TopBar"
 import { SaveStatusContext, useAiRun, useSaveStatus, useSession } from "./useSession"
 
@@ -32,7 +33,7 @@ export function SessionPage({ sessionId }: { sessionId: string | null }): React.
 function OpenSession({ id }: { id: string }): React.JSX.Element {
   const api = useApi()
   const act = useAction()
-  const { view, setView, reload } = useSession(api, id)
+  const { view, setView, setLine, reload } = useSession(api, id)
   const { run, start } = useAiRun(api, id, reload)
   const { saving, status } = useSaveStatus()
   const [stopping, setStopping] = useState(false)
@@ -137,10 +138,19 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
             }}
             focusRef={listRef}
           />
-          {/* The line panel (frame, editor, actions) takes this slot. */}
           <aside ref={panelRef} className="line-panel" aria-label="Line">
             {selectedLine === undefined ? null : (
-              <p className="line-panel-meta">{`Line ${String(selectedLine.index + 1)}`}</p>
+              <LinePanel
+                sessionId={id}
+                line={selectedLine}
+                video={view.videoName}
+                owner={{ kind: "project", id: view.projectId }}
+                styleOwner={{ kind: "style", variant: view.variant }}
+                onLine={setLine}
+                onLeave={() => {
+                  listRef.current?.focus()
+                }}
+              />
             )}
           </aside>
         </div>

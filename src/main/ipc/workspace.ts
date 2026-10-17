@@ -11,7 +11,6 @@ import {
 import type { Rule, Variant } from "../../core/library/types"
 import type { Preset, ProviderId } from "../../core/pipeline/types"
 import { modelOptions } from "../../core/providers/catalog"
-import { isEventIndex } from "../../core/review/proposal"
 import { sessionStats } from "../../core/session/stats"
 import {
   PROVIDERS,
@@ -363,7 +362,7 @@ function sessionId(args: readonly unknown[], index: number): string {
 
 function lineIndex(args: readonly unknown[], index: number): number {
   const value = args[index]
-  if (!isEventIndex(value)) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     throw new Error("Invalid line number.")
   }
   return value

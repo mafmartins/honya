@@ -2,7 +2,7 @@
 
 Honya is an open-source desktop app for fansubbers and hobbyist translators. It translates the dialogue of an English ASS script into European or Brazilian Portuguese, in your own voice, using your own API key for Claude, GPT, Gemini or Mistral.
 
-Everything runs locally on Linux, macOS and Windows. Scripts, profiles and keys stay on your machine. There is no account and no hosted service.
+Everything runs locally on Linux, macOS and Windows. Scripts, projects and keys stay on your machine. There is no account and no hosted service.
 
 ## Installing
 

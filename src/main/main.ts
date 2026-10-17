@@ -4,28 +4,22 @@ import { randomUUID } from "node:crypto"
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { DialogueCue } from "../core/ass/script"
 import { grabFrame } from "../core/frames/grab"
 import { bundledFfmpegPath, devFfmpegPath } from "../core/frames/path"
-import { compileCard, emptyBase } from "../core/library/card"
+import { addCorrections, compileCard, emptyBase } from "../core/library/card"
 import { createFileStore, type FileProfileStore } from "../core/library/fileStore"
-import type { Rule, SeriesProfile, StyleCard } from "../core/library/types"
+import type { Rule, SeriesProfile } from "../core/library/types"
 import type { Completer } from "../core/pipeline/run"
-import type { ProviderId, Variant } from "../core/pipeline/types"
-import { completeJson, completeText, type ChatInput } from "../core/providers/complete"
+import type { ProviderId } from "../core/pipeline/types"
+import { completeJson, type ChatInput } from "../core/providers/complete"
 import { providerError } from "../core/providers/errors"
 import { testKey } from "../core/providers/keyTest"
 import { withRetry } from "../core/providers/retry"
-import { createProfileHandlers, type ProfileHandlers } from "./ipc/profiles"
 import { registerSetupIpc } from "./ipc/register"
-import { registerTranslateIpc } from "./ipc/translate"
 import { registerWorkspaceIpc } from "./ipc/workspace"
 import { createModelStore, type ModelStore } from "./modelStore"
 import { createSecretStore, type SecretStore } from "./secrets"
 import { createLearner } from "./learn"
-import { createReviewHandlers } from "./translate/review"
-import { createRunner, type TranslateEvent } from "./translate/runner"
-import { createSessionStore } from "./translate/session"
 import { callEntry, problemEntry } from "./providerLog"
 import { createSettingsStore } from "./settingsStore"
 import { createAiService, type AiService, type WorkspaceEvent } from "./workspace/ai"
@@ -43,48 +37,7 @@ function boot(): void {
   const secrets = createSecretStore(safeStorage, { read: readKeyFile, write: writeKeyFile })
   const models = createModelStore({ read: readModelFile, write: writeModelFile })
   const store = createFileStore(join(app.getPath("userData"), "profiles"))
-  const profiles = createProfileHandlers(store)
-  const sessions = createSessionStore(join(app.getPath("userData"), "sessions"))
-  const runner = createRunner({
-    sessions,
-    loadCard: (variant, seriesId) => loadCard(profiles, variant, seriesId),
-    hasKey: (provider) => secrets.hasKey(provider),
-    logProblem: (provider, problem) => {
-      logLine(problemEntry({ time: new Date().toISOString(), provider, ...problem }))
-    },
-    completerFor: (provider, onRetry) =>
-      withRetry(
-        (request) => completeWithProvider(secrets, models, provider, request),
-        sleep,
-        onRetry,
-      ),
-    grabFrames,
-    ffmpegReady,
-    readScript: (path) => readFileSync(path, "utf8"),
-    now: () => Date.now(),
-    newId: () => randomUUID(),
-    sleep,
-    emit: emitToWindows,
-  })
-  const review = createReviewHandlers({
-    sessions,
-    profiles,
-    ask: (provider) => (prompt) => askCheap(secrets, models, provider, prompt),
-    writeFile: (path, text) => {
-      writeFileSync(path, text, "utf8")
-    },
-    reveal: (path) => {
-      shell.showItemInFolder(path)
-    },
-    now: () => Date.now(),
-  })
-  registerTranslateIpc({
-    runner,
-    review,
-    sessions,
-    readScript: (path) => readFileSync(path, "utf8"),
-  })
-  const { ai, projects } = bootWorkspace(store, profiles, secrets, models)
+  const { ai, projects } = bootWorkspace(store, secrets, models)
   const learner = createLearner({
     knownRules: (owner) => projects.knownRules(owner),
     variantOf: (owner) =>
@@ -96,7 +49,7 @@ function boot(): void {
         () => undefined,
       ),
   })
-  registerSetupIpc({ open: openFile, secrets, models, profiles, learner })
+  registerSetupIpc({ open: openFile, secrets, models, learner })
   let quitting = false
   app.on("before-quit", (event) => {
     if (quitting || ai.activeId() === null) {
@@ -129,7 +82,6 @@ function boot(): void {
 // so quitting can stop a run, and the projects, which learning reads rules from.
 function bootWorkspace(
   store: FileProfileStore,
-  profiles: ProfileHandlers,
   secrets: SecretStore,
   models: ModelStore,
 ): { ai: AiService; projects: ProjectService } {
@@ -199,7 +151,10 @@ function bootWorkspace(
     knownRules,
     addCorrections: (projectId, corrections) => {
       const series = requireSeries(store, projectId)
-      profiles.addCorrections(series.variant, series.id, corrections)
+      const next = addCorrections(series, corrections)
+      if (next !== series) {
+        store.saveSeries(next)
+      }
     },
     addRule: (owner, rule) => {
       projects.addRule(owner, rule)
@@ -266,28 +221,6 @@ async function saveFile(defaultPath: string, filters: FileFilter[]): Promise<str
     return null
   }
   return result.filePath === "" ? null : result.filePath
-}
-
-function emitToWindows(event: TranslateEvent): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.webContents.isDestroyed()) {
-      window.webContents.send("honya:translate-event", event)
-    }
-  }
-}
-
-function loadCard(
-  profiles: ProfileHandlers,
-  variant: Variant,
-  seriesId: string,
-): { card: StyleCard; seriesName: string } {
-  const found = profiles.listSeries(variant).series.find((item) => item.id === seriesId)
-  if (found === undefined) {
-    throw new Error("That series no longer exists.")
-  }
-  const { base } = profiles.loadBase(variant)
-  const card = compileCard(base, profiles.loadSeries(variant, seriesId))
-  return { card, seriesName: found.name }
 }
 
 async function openFile(filters: { name: string; extensions: string[] }[]): Promise<string | null> {
@@ -470,61 +403,10 @@ function providerLogPath(): string {
   return file
 }
 
-async function askCheap(
-  secrets: SecretStore,
-  models: ModelStore,
-  provider: ProviderId,
-  prompt: string,
-): Promise<{ text: string } | { refused: true }> {
-  const apiKey = secrets.getKey(provider)
-  if (apiKey === null) {
-    return { refused: true }
-  }
-  return completeText({
-    provider,
-    model: models.get(provider).cheap,
-    apiKey,
-    prompt,
-    fetch,
-    effort: "low",
-  })
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolvePromise) => {
     setTimeout(resolvePromise, ms)
   })
-}
-
-async function grabFrames(
-  cues: readonly DialogueCue[],
-  videoPath: string,
-  _setting: "marked" | "every",
-  progress: (done: number, total: number) => void,
-  shouldStop: () => boolean,
-): Promise<{ frames: Map<string, Uint8Array>; notes: string[] }> {
-  const frames = new Map<string, Uint8Array>()
-  const notes: string[] = []
-  const ffmpegPath = ffmpegLocation()
-  for (const cue of cues) {
-    if (shouldStop()) {
-      break
-    }
-    try {
-      const bytes = await grabFrame({
-        ffmpegPath,
-        videoPath,
-        startMs: cue.startMs,
-        endMs: cue.endMs,
-        run: runFfmpeg,
-      })
-      frames.set(String(cue.index), bytes)
-    } catch {
-      notes.push(`event ${String(cue.index)}: frame grab failed`)
-    }
-    progress(frames.size + notes.length, cues.length)
-  }
-  return { frames, notes }
 }
 
 function runFfmpeg(command: string, args: string[]): Promise<{ code: number; stdout: Uint8Array }> {

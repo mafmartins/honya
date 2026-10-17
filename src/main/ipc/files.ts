@@ -10,17 +10,6 @@ export interface FileFilter {
 
 export type OpenFile = (filters: FileFilter[]) => Promise<string | null>
 
-export interface PickedScript {
-  path: string
-  name: string
-  text: string
-}
-
-export interface PickedVideo {
-  path: string
-  name: string
-}
-
 export interface ListedStyle {
   name: string
   guess: StyleClassification
@@ -36,20 +25,6 @@ export const ASS_FILTER: FileFilter[] = [{ name: "ASS subtitles", extensions: ["
 export const VIDEO_FILTER: FileFilter[] = [
   { name: "Video", extensions: ["mkv", "mp4", "webm", "avi", "mov"] },
 ]
-
-export async function pickScript(open: OpenFile): Promise<PickedScript | null> {
-  const path = await open(ASS_FILTER)
-  if (path === null) {
-    return null
-  }
-  const { text } = readScript(path)
-  return { path, name: basename(path), text }
-}
-
-export async function pickVideo(open: OpenFile): Promise<PickedVideo | null> {
-  const path = await open(VIDEO_FILTER)
-  return path === null ? null : { path, name: basename(path) }
-}
 
 export async function pickExample(open: OpenFile): Promise<PickedExample | null> {
   const path = await open(ASS_FILTER)

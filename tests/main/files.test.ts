@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { pickExample, pickScript, pickVideo, type FileFilter } from "../../src/main/ipc/files"
+import { pickExample, type FileFilter } from "../../src/main/ipc/files"
 
 const SCRIPT = `[Script Info]
 ScriptType: v4.00+
@@ -23,38 +23,31 @@ function fixture(name: string, text: string): string {
 describe("file dialogs", () => {
   it("returns null when the dialog is cancelled", async () => {
     const cancel = (): Promise<null> => Promise.resolve(null)
-    expect(await pickScript(cancel)).toBeNull()
-    expect(await pickVideo(cancel)).toBeNull()
     expect(await pickExample(cancel)).toBeNull()
   })
 
   it("reads a script and filters the dialog to ass files", async () => {
     const path = fixture("ep01.ass", SCRIPT)
     let filters: FileFilter[] = []
-    const picked = await pickScript((next) => {
+    const picked = await pickExample((next) => {
       filters = next
       return Promise.resolve(path)
     })
     expect(filters).toEqual([{ name: "ASS subtitles", extensions: ["ass"] }])
-    expect(picked).toEqual({ path, name: "ep01.ass", text: SCRIPT })
+    expect(picked?.text).toBe(SCRIPT)
   })
 
   it("accepts a script with a byte order mark and windows line endings", async () => {
     const path = fixture("aegisub.ass", `\uFEFF${SCRIPT.replaceAll("\n", "\r\n")}`)
-    const picked = await pickScript(() => Promise.resolve(path))
+    const picked = await pickExample(() => Promise.resolve(path))
     expect(picked?.text.startsWith("[Script Info]")).toBe(true)
   })
 
   it("refuses a file without dialogue lines", async () => {
     const path = fixture("notes.ass", "hello world")
-    await expect(pickScript(() => Promise.resolve(path))).rejects.toThrow(
+    await expect(pickExample(() => Promise.resolve(path))).rejects.toThrow(
       "notes.ass has no dialogue lines. Is it an ASS script?",
     )
-  })
-
-  it("returns a video's path and name", async () => {
-    const picked = await pickVideo(() => Promise.resolve("/videos/ep01.mkv"))
-    expect(picked).toEqual({ path: "/videos/ep01.mkv", name: "ep01.mkv" })
   })
 
   it("returns an example's styles with their guesses, once each", async () => {

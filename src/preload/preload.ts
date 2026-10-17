@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from "electron"
-import { readBaseProfile } from "../core/library/guards"
 import {
   BEFORE_CLOSE_CHANNEL,
   CLOSE_ANSWER_CHANNEL,
@@ -30,24 +29,12 @@ import {
   readStyleView,
   readWorkspaceEvent,
   readBoolean,
-  readCheckResult,
-  readFinishResult,
   readCombined,
   readLearned,
-  readLoadedBase,
   readModelPair,
   readNothing,
   readPickedExample,
-  readPickedScript,
-  readPickedVideo,
-  readPreparedScript,
-  readReviewView,
-  readRules,
-  readSeriesList,
-  readSeriesSummary,
   readString,
-  readTranslateEvent,
-  readUnfinished,
 } from "./readers"
 
 const ws = workspaceChannel
@@ -121,8 +108,6 @@ const honya: HonyaApi = {
   confirmClose(allow) {
     ipcRenderer.send(CLOSE_ANSWER_CHANNEL, allow)
   },
-  pickScript: () => picked("honya:pick-script", [], readPickedScript),
-  pickVideo: () => picked("honya:pick-video", [], readPickedVideo),
   pickExample: () => picked("honya:pick-example", [], readPickedExample),
   hasKey: (provider) => read("honya:has-key", [provider], readBoolean),
   setKey: (provider, key) => read("honya:set-key", [provider, key], readNothing),
@@ -130,54 +115,10 @@ const honya: HonyaApi = {
   getModels: (provider) => read("honya:get-models", [provider], readModelPair),
   setModels: (provider, pair) => read("honya:set-models", [provider, pair], readModelPair),
   resetModels: (provider) => read("honya:reset-models", [provider], readModelPair),
-  listSeries: (variant) => read("honya:list-series", [variant], readSeriesList),
-  createSeries: (variant, name) => read("honya:create-series", [variant, name], readSeriesSummary),
-  renameSeries: (variant, id, name) =>
-    read("honya:rename-series", [variant, id, name], readSeriesSummary),
-  deleteSeries: (variant, id) => read("honya:delete-series", [variant, id], readNothing),
-  loadSeriesRules: (variant, id) => read("honya:load-series-rules", [variant, id], readRules),
-  saveSeriesRules: (variant, id, rules) =>
-    read("honya:save-series-rules", [variant, id, rules], readNothing),
-  loadBase: (variant) => read("honya:load-base", [variant], readLoadedBase),
-  saveBase: (base) => read("honya:save-base", [base], readBaseProfile),
-  importExample: (variant, name, text, styles) =>
-    read("honya:import-example", [variant, name, text, styles], readBaseProfile),
   learnFromScript: (owner, provider, portuguese, english) =>
     read("honya:learn-from-script", [owner, provider, portuguese, english], readLearned),
   combineLearned: (provider, learned) =>
     read("honya:combine-learned", [provider, learned], readCombined),
-  prepareTranslation: (scriptPath, variant) =>
-    read("honya:translate-prepare", [scriptPath, variant], readPreparedScript),
-  startTranslation: (request) => read("honya:translate-start", [request], readString),
-  resumeTranslation: (id) => read("honya:translate-resume", [id], readString),
-  stopTranslation: () => read("honya:translate-stop", [], readNothing),
-  latestUnfinished: () => picked("honya:translate-latest", [], readUnfinished),
-  discardTranslation: (id) => read("honya:translate-discard", [id], readNothing),
-  loadReview: (id) => read("honya:review-load", [id], readReviewView),
-  acceptReviewLine: (id, eventIndex, words) =>
-    read("honya:review-accept", [id, eventIndex, words], readReviewView),
-  checkEdit: (id, eventIndex, words) =>
-    read("honya:review-check", [id, eventIndex, words], readCheckResult),
-  confirmEdit: (id, eventIndex, words, proposal, applyOthers, ruleTarget) =>
-    read(
-      "honya:review-confirm",
-      [id, eventIndex, words, proposal, applyOthers, ruleTarget],
-      readReviewView,
-    ),
-  finishTranslation: (id) => read("honya:translate-finish", [id], readFinishResult),
-  revealOutput: (id) => read("honya:translate-reveal", [id], readNothing),
-  onTranslateEvent(listener) {
-    const handler = (_event: unknown, value: unknown): void => {
-      const event = readTranslateEvent(value)
-      if (event !== null) {
-        listener(event)
-      }
-    }
-    ipcRenderer.on("honya:translate-event", handler)
-    return () => {
-      ipcRenderer.removeListener("honya:translate-event", handler)
-    }
-  },
 }
 
 contextBridge.exposeInMainWorld("honya", honya)

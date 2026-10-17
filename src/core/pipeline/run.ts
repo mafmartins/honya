@@ -1,7 +1,5 @@
 import { tooLong } from "../ass/fit"
-import { appendNote } from "../ass/notes"
 import { readAss, type DialogueCue } from "../ass/script"
-import { applyTranslations } from "../ass/write"
 import type { FrameSetting, StyleCard } from "../library/types"
 import type { AiLine } from "../session/lines"
 import type { SessionBrief } from "../session/types"
@@ -22,8 +20,6 @@ import { readBriefReply, readLinesReply, type Term } from "./replies"
 import { BRIEF_SCHEMA, LINES_SCHEMA, type ReplySchema } from "./schemas"
 import type { LineResult, LineSignals, Preset, Usage } from "./types"
 
-export type { LineResult }
-
 export type RunEvent =
   | { type: "brief" }
   // indexes: the cue indexes the batch translates.
@@ -31,13 +27,8 @@ export type RunEvent =
   | { type: "escalate"; count: number }
   // Lines sent back to the cheap model to fix a variant form or a glossary rule.
   | { type: "fix"; count: number }
-  | { type: "batch-done"; index: number; total: number; lines: LineResult[] }
   // A reply that couldn't be used, in whole or in part; worth logging.
   | { type: "problem"; tier: "cheap" | "strong"; reason: string; excerpt?: string }
-
-export function totalBatches(lineCount: number): number {
-  return chunkDialogue(new Array<null>(lineCount).fill(null)).length
-}
 
 export interface CompletionRequest {
   tier: "cheap" | "strong"
@@ -56,30 +47,6 @@ export type Completion = (
 }
 
 export type Completer = (request: CompletionRequest) => Promise<Completion>
-
-export interface SavedRun {
-  completedBatches: number
-  results: Map<string, LineResult>
-  glossary: { source: string; pt: string }[]
-  brief: string
-  hardIds: string[]
-  frameIds: string[]
-  strongIds: string[]
-}
-
-export interface RunInput {
-  ass: string
-  dialogueStyles: ReadonlySet<string>
-  card: StyleCard
-  preset: Preset
-  complete: Completer
-  sleep: (ms: number) => Promise<void>
-  stopAfterBatches?: number
-  frameSetting?: "none" | "marked" | "every"
-  // Asked for the frames one request needs, by line id, just before that request.
-  frames?: FrameProvider
-  onEvent?: (event: RunEvent) => void
-}
 
 // Translates only the lines that have no Portuguese yet, with the lines that do as
 // context. Each finished batch goes to `onBatch`; lines with no model answer are left
@@ -112,15 +79,8 @@ export interface MissingInput {
 
 export type FrameProvider = (ids: readonly string[]) => Promise<ReadonlyMap<string, Uint8Array>>
 
-export interface RunResult {
-  ass: string
-  report: string[]
-  saved: SavedRun
-}
-
 // Stored as the brief when the brief call failed, so a resumed run doesn't ask again.
 const BRIEF_UNAVAILABLE = "brief unavailable"
-const FAILED_REASON = "tradução falhou"
 const CONTEXT_LINES = 3
 const NO_FRAMES: FrameProvider = () => Promise.resolve(new Map())
 
@@ -153,30 +113,6 @@ interface BatchContext {
   frameIds: ReadonlySet<string>
   previous: { english: string; pt: string }[]
   fixed: { english: string; pt: string }[]
-}
-
-export async function runTranslation(input: RunInput): Promise<RunResult> {
-  const cues = dialogueCues(input)
-  input.onEvent?.({ type: "brief" })
-  const brief = await requestBrief(input, cues, input.frameSetting ?? "none")
-  const saved: SavedRun = {
-    completedBatches: 0,
-    results: new Map(),
-    glossary: addGlossary(emptyGlossary(), brief.terms).entries,
-    brief: brief.summary,
-    hardIds: brief.hard,
-    frameIds: brief.frames,
-    strongIds: [],
-  }
-  return continueTranslation(input, saved, cues)
-}
-
-export async function resumeTranslation(saved: SavedRun, input: RunInput): Promise<RunResult> {
-  return continueTranslation(input, saved, dialogueCues(input))
-}
-
-function dialogueCues(input: RunInput): DialogueCue[] {
-  return readAss(input.ass).filter((cue) => input.dialogueStyles.has(cue.style))
 }
 
 export async function translateMissing(input: MissingInput): Promise<"done" | "stopped"> {
@@ -376,90 +312,6 @@ async function requestBrief(
   }
 }
 
-async function continueTranslation(
-  input: RunInput,
-  saved: SavedRun,
-  cues: readonly DialogueCue[],
-): Promise<RunResult> {
-  const chunks = chunkDialogue([...cues])
-  const system = translatorSystem(input.card, saved.brief === BRIEF_UNAVAILABLE ? "" : saved.brief)
-  let glossary: Glossary = { entries: [...saved.glossary] }
-  const results = new Map(saved.results)
-  const strongIds = new Set(saved.strongIds)
-  let completed = saved.completedBatches
-  let current = saved
-
-  for (let index = completed; index < chunks.length; index += 1) {
-    if (input.stopAfterBatches !== undefined && completed >= input.stopAfterBatches) {
-      break
-    }
-    const chunk = chunks[index]
-    if (chunk === undefined) {
-      break
-    }
-    input.onEvent?.({
-      type: "batch",
-      index: index + 1,
-      total: chunks.length,
-      indexes: chunk.map((cue) => cue.index),
-    })
-    const context: BatchContext = {
-      engine: input,
-      system,
-      setting: input.frameSetting ?? "none",
-      frames: input.frames ?? NO_FRAMES,
-      hardIds: new Set(saved.hardIds),
-      frameIds: new Set(saved.frameIds),
-      previous: previousLines(chunks[index - 1] ?? [], results),
-      fixed: [],
-    }
-    const translated = await translateChunk(context, chunk, glossary)
-    for (const id of translated.strongIds) {
-      strongIds.add(id)
-    }
-    const lines = translated.answers.map(({ cue, line }) =>
-      line === undefined ? englishFailure(cue) : finishLine(line, cue, input.card.cpsLimit, input),
-    )
-    for (const line of lines) {
-      results.set(line.id, line)
-    }
-    glossary = translated.glossary
-    completed += 1
-    current = {
-      completedBatches: completed,
-      results: new Map(results),
-      glossary: glossary.entries,
-      brief: saved.brief,
-      hardIds: saved.hardIds,
-      frameIds: saved.frameIds,
-      strongIds: [...strongIds],
-    }
-    input.onEvent?.({
-      type: "batch-done",
-      index: index + 1,
-      total: chunks.length,
-      lines,
-    })
-  }
-
-  return render(input, current)
-}
-
-// The last few lines of the previous batch, so a batch doesn't start cold.
-function previousLines(
-  chunk: readonly DialogueCue[],
-  results: ReadonlyMap<string, LineResult>,
-): { english: string; pt: string }[] {
-  const previous: { english: string; pt: string }[] = []
-  for (const cue of chunk.slice(-CONTEXT_LINES)) {
-    const line = results.get(String(cue.index))
-    if (line !== undefined && line.reason !== FAILED_REASON) {
-      previous.push({ english: cue.visible, pt: withoutNote(line.words) })
-    }
-  }
-  return previous
-}
-
 async function translateChunk(
   context: BatchContext,
   chunk: readonly DialogueCue[],
@@ -629,18 +481,6 @@ function flaggedBecause(
   return `${reasons.join("; ") || "worth a second look"}${note}`
 }
 
-function finishLine(
-  line: LineResult,
-  cue: DialogueCue,
-  cpsLimit: number,
-  input: Engine,
-): LineResult {
-  const done = finished(line, cue, cpsLimit, input)
-  return done.note === null
-    ? done.line
-    : copyLine(done.line, appendNote(done.line.words, done.note))
-}
-
 // The line's words without a note, and the note review should show, if any.
 function finished(line: LineResult, cue: DialogueCue, cpsLimit: number, input: Engine): Finished {
   const unfit = lineUnfit(line.words, cue, cpsLimit)
@@ -685,25 +525,12 @@ function lineUnfit(words: string, cue: DialogueCue, cpsLimit: number): boolean {
   return tooLong(words, cue.visible, cue.startMs, cue.endMs, cpsLimit)
 }
 
-function englishFailure(cue: DialogueCue): LineResult {
-  return {
-    id: String(cue.index),
-    words: appendNote(cue.visible, FAILED_REASON),
-    mark: "doubt",
-    reason: FAILED_REASON,
-  }
-}
-
 function copyLine(line: LineResult, words: string): LineResult {
   const next: LineResult = { id: line.id, words, mark: line.mark }
   if (line.reason !== undefined) {
     next.reason = line.reason
   }
   return next
-}
-
-function withoutNote(words: string): string {
-  return words.replace(/\s*\{note: [^}]*\}$/, "")
 }
 
 function problem(input: Engine, tier: Tier, reason: string, excerpt?: string): void {
@@ -738,17 +565,4 @@ async function imagesFor(
     }
   }
   return images
-}
-
-function render(input: RunInput, saved: SavedRun): RunResult {
-  const translations = new Map<number, string>()
-  for (const [id, line] of saved.results) {
-    const index = Number(id)
-    if (!Number.isInteger(index)) {
-      continue
-    }
-    translations.set(index, line.words)
-  }
-  const applied = applyTranslations(input.ass, input.dialogueStyles, translations)
-  return { ass: applied.text, report: applied.report, saved }
 }

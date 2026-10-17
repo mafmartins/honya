@@ -5,7 +5,7 @@ import {
   type ProviderId,
   type SessionView,
 } from "../../../shared/api"
-import { ActivityLine } from "../../translate/ActivityLine"
+import { ActivityLine } from "../ActivityLine"
 import { providerName } from "../labels"
 import type { RunState } from "./useSession"
 

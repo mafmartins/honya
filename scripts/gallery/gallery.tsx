@@ -232,8 +232,10 @@ async function main(): Promise<void> {
       <DonePanel result={await api.finishTranslation("s1")} onReveal={noop} onAnother={noop} />
     </Frame>,
   ]
-  // #start, #review, … shows one screen alone, for importing screens one at a time.
-  const only = window.location.hash.slice(1)
+  // ?screen=start, ?screen=review, … shows one screen alone, for importing screens one at
+  // a time. (The hash is left to tools such as Figma's capture.)
+  const wanted = new URLSearchParams(window.location.search).get("screen") ?? ""
+  const only = frames.some((frame) => frame.key === wanted) ? wanted : ""
   const shown = frames.filter((frame) => only === "" || frame.key === only)
   const root = document.getElementById("gallery")
   if (root === null) {

@@ -5,6 +5,7 @@ import {
   readKeyTest,
   readLaunchInfo,
   readLineView,
+  readRetranslated,
   readModelOptions,
   readPickedSessionView,
   readProjectView,
@@ -109,6 +110,12 @@ describe("workspace readers", () => {
     expect(readLineView({ ...line, words: 3 })).toBeNull()
     expect(readLineView({ ...line, budget: "18" })).toBeNull()
     expect(readLineView({ ...line, end: undefined })).toBeNull()
+  })
+
+  it("accepts a retranslated line and rejects a bad one", () => {
+    expect(readRetranslated({ line, keptEdit: true })).toEqual({ line, keptEdit: true })
+    expect(readRetranslated({ line, keptEdit: "no" })).toBeNull()
+    expect(readRetranslated({ line: { ...line, words: 3 }, keptEdit: false })).toBeNull()
   })
 
   it("accepts a project view and rejects a malformed one", () => {

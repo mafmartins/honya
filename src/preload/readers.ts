@@ -15,6 +15,7 @@ import type {
   LaunchInfo,
   LineOrigin,
   LineView,
+  Retranslated,
   ListedStyle,
   ModelOption,
   ProjectSummary,
@@ -436,6 +437,14 @@ export function readLineView(value: unknown): LineView | null {
     flag: value.flag,
     budget: value.budget,
   }
+}
+
+export function readRetranslated(value: unknown): Retranslated | null {
+  if (!isRecord(value) || typeof value.keptEdit !== "boolean") {
+    return null
+  }
+  const line = readLineView(value.line)
+  return line === null ? null : { line, keptEdit: value.keptEdit }
 }
 
 export function readSessionStats(value: unknown): SessionStats | null {

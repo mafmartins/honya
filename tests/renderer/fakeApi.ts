@@ -658,7 +658,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
         item.usd += 0.001
         item.requests += 1
         touch(item)
-        return lineView(entry)
+        return { line: lineView(entry), keptEdit: false }
       }),
     draftRule: (id, index) =>
       attempt((): Rule => {

@@ -231,6 +231,33 @@ describe("line panel", () => {
     expect(within(panel()).queryByText("This replaces your translation. Ask anyway?")).toBeNull()
   })
 
+  it("locks the editor while asking and says when your edit was kept", async () => {
+    const api = fakeApi()
+    const { id } = await translatedSession(api)
+    let answer: () => void = () => undefined
+    api.retranslate = (session, index) =>
+      new Promise((resolve) => {
+        answer = () => {
+          void api.editLine(session, index, "Mudei.").then((line) => {
+            resolve({ line, keptEdit: true })
+          })
+        }
+      })
+    open(api, id)
+    await select("pt: Hello.")
+    fireEvent.click(within(panel()).getByRole("button", { name: "Ask AI again" }))
+    expect(editor().disabled).toBe(true)
+    await act(async () => {
+      answer()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(editor().disabled).toBe(false)
+    expect(editor().value).toBe("Mudei.")
+    expect(
+      within(panel()).getByText("Kept your edit; the AI's suggestion was not applied."),
+    ).toBeTruthy()
+  })
+
   it("shows a failed request in the panel", async () => {
     const api = fakeApi()
     const { id } = await translatedSession(api)

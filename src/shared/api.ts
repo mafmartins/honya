@@ -6,7 +6,7 @@ import type { Combined, LearnScript, Learned } from "../core/library/learn"
 import type { ModelOption } from "../core/providers/catalog"
 import type { SessionStats } from "../core/session/stats"
 import type { AppSettings } from "../main/settingsStore"
-import type { WorkspaceEvent } from "../main/workspace/ai"
+import type { Retranslated, WorkspaceEvent } from "../main/workspace/ai"
 import type { ExportPreview } from "../main/workspace/export"
 import type {
   Owner,
@@ -28,7 +28,7 @@ export type { Cost } from "../core/providers/prices"
 export type { LineOrigin } from "../core/session/types"
 export type { ModelCost, SessionStats } from "../core/session/stats"
 export type { AppSettings } from "../main/settingsStore"
-export type { WorkspaceEvent } from "../main/workspace/ai"
+export type { Retranslated, WorkspaceEvent } from "../main/workspace/ai"
 export type { ExportPreview } from "../main/workspace/export"
 export type {
   Owner,
@@ -109,7 +109,7 @@ export interface WorkspaceApi {
   runAi(id: string): Promise<void>
   stopAi(): Promise<void>
   aiActive(): Promise<string | null>
-  retranslate(id: string, index: number, hint: string): Promise<LineView>
+  retranslate(id: string, index: number, hint: string): Promise<Retranslated>
   draftRule(id: string, index: number): Promise<Rule>
   lineFrame(id: string, index: number): Promise<string | null>
   exportPreview(id: string): Promise<ExportPreview>

@@ -259,10 +259,13 @@ function LineEditor({
     setConfirming(false)
     cancelTimer()()
     run("ask", async () => {
-      const next = await api.retranslate(sessionId, index, hint.trim())
+      const { line: next, keptEdit } = await api.retranslate(sessionId, index, hint.trim())
       onLine(next)
-      edited.current = false
+      edited.current = keptEdit
       show(next.words ?? "")
+      if (keptEdit) {
+        setNotice("Kept your edit; the AI's suggestion was not applied.")
+      }
     })
   }
 
@@ -296,6 +299,8 @@ function LineEditor({
           id={editorId}
           rows={3}
           value={text}
+          // An edit made while the AI answers would be lost to its suggestion.
+          disabled={busy === "ask"}
           onChange={(event) => {
             const next = event.target.value
             typed.current = next

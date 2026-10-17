@@ -40,6 +40,13 @@ export type WorkspaceEvent =
       message: string | null
     }
 
+// An "Ask AI again" answer: the line as saved, and whether an edit made while the AI
+// was answering was kept instead of the AI's suggestion.
+export interface Retranslated {
+  line: LineView
+  keptEdit: boolean
+}
+
 // What a run reports as it goes, before the session id is added.
 type RunProgress = Omit<Extract<WorkspaceEvent, { type: "run-progress" }>, "type" | "sessionId">
 
@@ -68,7 +75,7 @@ export interface AiService {
   stop(): void
   activeId(): string | null
   idle(): Promise<void>
-  retranslate(sessionId: string, index: number, hint: string): Promise<LineView>
+  retranslate(sessionId: string, index: number, hint: string): Promise<Retranslated>
   draftRule(sessionId: string, index: number): Promise<Rule>
   // The line's video frame as a PNG data URL, or null with no video or a failed grab.
   frame(sessionId: string, index: number): Promise<string | null>
@@ -402,7 +409,11 @@ export function createAiService(deps: AiServiceDeps): AiService {
       for (const line of session.lines) {
         if (line.words !== null) known.set(line.index, line.words)
       }
+      // The words when the request went out: if the line changes meanwhile, that
+      // edit is kept and the AI's answer dropped.
+      const asked = session.lines.find((line) => line.index === index)?.words ?? null
       let result: AiLine | null = null
+      let keptEdit = false
       let saved: WorkSession
       try {
         result = await retranslateLine({
@@ -419,9 +430,13 @@ export function createAiService(deps: AiServiceDeps): AiService {
         })
       } finally {
         const answer = result
-        saved = update(sessionId, (fresh) =>
-          answer === null ? flush(fresh) : applyRetranslation(flush(fresh), answer),
-        )
+        saved = update(sessionId, (fresh) => {
+          const now = fresh.lines.find((line) => line.index === index)?.words ?? null
+          keptEdit = answer !== null && now !== asked
+          return answer === null || keptEdit
+            ? flush(fresh)
+            : applyRetranslation(flush(fresh), answer)
+        })
       }
       if (result === null) {
         throw new Error("The model couldn't translate this line. Try again.")
@@ -430,7 +445,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
       if (view === undefined) {
         throw new Error("This line is not in the session.")
       }
-      return view
+      return { line: view, keptEdit }
     },
 
     async draftRule(sessionId, index) {

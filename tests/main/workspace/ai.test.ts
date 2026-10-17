@@ -288,12 +288,31 @@ describe("AI service", () => {
   it("retranslates a manual line with the hint and adds the spend", async () => {
     const { ai, sessions, requests } = setup(session(5))
     sessions.edit(ID, 1, "Escrito à mão.")
-    const view = await ai.retranslate(ID, 1, "mais curto")
+    const { line: view, keptEdit } = await ai.retranslate(ID, 1, "mais curto")
+    expect(keptEdit).toBe(false)
     expect(view).toMatchObject({ index: 1, words: "pt 1", origin: "ai" })
     expect(requests[0]?.tier).toBe("strong")
     expect(requests[0]?.prompt).toContain("mais curto")
     const saved = sessions.get(ID)
     expect(saved.lines[1]).toMatchObject({ words: "pt 1", retranslated: 1 })
+    expect(saved.spend[0]?.requests).toBe(1)
+  })
+
+  it("keeps an edit made while asking again and still adds the spend", async () => {
+    const holder: { sessions?: ReturnType<typeof createWorkSessions> } = {}
+    const { ai, sessions } = setup(session(5), {
+      model: (request) => {
+        holder.sessions?.edit(ID, 1, "Mudei entretanto.")
+        return echo(request)
+      },
+    })
+    holder.sessions = sessions
+    sessions.edit(ID, 1, "Escrito à mão.")
+    const { line, keptEdit } = await ai.retranslate(ID, 1, "")
+    expect(keptEdit).toBe(true)
+    expect(line).toMatchObject({ index: 1, words: "Mudei entretanto.", origin: "manual" })
+    const saved = sessions.get(ID)
+    expect(saved.lines[1]).toMatchObject({ words: "Mudei entretanto.", retranslated: 0 })
     expect(saved.spend[0]?.requests).toBe(1)
   })
 

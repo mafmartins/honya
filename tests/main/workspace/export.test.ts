@@ -22,7 +22,16 @@ function edited(): WorkSession {
 const SPENT = { model: "gemini-2.5-flash", usage: { input: 10, output: 5, cached: 0 } }
 const SUGGESTION = { kind: "prose", text: "Use Raios for Damn it.", source: "", pt: "", lines: [0] }
 
-function setup(start: WorkSession, reply: Completion = { value: { suggestions: [SUGGESTION] } }) {
+interface Failures {
+  request?: Error
+  write?: Error
+}
+
+function setup(
+  start: WorkSession,
+  reply: Completion = { value: { suggestions: [SUGGESTION] } },
+  fail: Failures = {},
+) {
   let stored = start
   const requests: CompletionRequest[] = []
   const written: { path: string; text: string }[] = []
@@ -37,12 +46,19 @@ function setup(start: WorkSession, reply: Completion = { value: { suggestions: [
     },
     completerFor: () => (request) => {
       requests.push(request)
-      return Promise.resolve({ ...reply, spent: SPENT })
+      return fail.request === undefined
+        ? Promise.resolve({ ...reply, spent: SPENT })
+        : Promise.reject(fail.request)
     },
     knownRules: () => [],
     addCorrections: (_id, list) => corrections.push(list),
     addRule: (owner, rule) => rules.push({ owner, rule }),
-    writeFile: (path, text) => written.push({ path, text }),
+    writeFile: (path, text) => {
+      if (fail.write !== undefined) {
+        throw fail.write
+      }
+      written.push({ path, text })
+    },
     now: () => Date.parse("2026-10-17T12:00:00Z"),
   })
   return { service, requests, written, corrections, rules, stored: () => stored }
@@ -97,5 +113,23 @@ describe("export service", () => {
     expect(t.rules).toEqual([{ owner, rule }])
     expect(t.corrections).toEqual([[{ en: "Damn it!", draft: "Droga!", final: "Raios!" }]])
     expect(t.stored().exportedAt).toBe("2026-10-17T12:00:00.000Z")
+  })
+
+  it("returns no suggestions when the suggestion request fails", async () => {
+    const t = setup(edited(), undefined, { request: new Error("Gemini rejected the key.") })
+    const preview = await t.service.preview("s1")
+    expect(preview).toMatchObject({ translated: 2, english: 1, openFlags: 1 })
+    expect(preview.suggestions).toEqual([])
+  })
+
+  it("saves no rules or corrections when the file can't be written", () => {
+    const t = setup(edited(), undefined, { write: new Error("EACCES: permission denied") })
+    const rule: Rule = { kind: "prose", text: "Use Raios." }
+    expect(() =>
+      t.service.write("s1", "/a/out.ass", [{ owner: { kind: "project", id: "p1" }, rule }]),
+    ).toThrow("EACCES: permission denied")
+    expect(t.rules).toHaveLength(0)
+    expect(t.corrections).toHaveLength(0)
+    expect(t.stored().exportedAt).toBeNull()
   })
 })

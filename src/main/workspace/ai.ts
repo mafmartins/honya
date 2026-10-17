@@ -47,6 +47,11 @@ export interface AiServiceDeps {
   grabFrame(videoPath: string, cue: DialogueCue): Promise<Uint8Array | null>
   emit(event: WorkspaceEvent): void
   knownRules(projectId: string): Rule[]
+  // A reply the pipeline could only partly use, for the provider log.
+  logProblem?(
+    provider: ProviderId,
+    problem: { tier: "cheap" | "strong"; problem: string; excerpt?: string },
+  ): void
   // Clock for the session's active time; Date.now when left out.
   now?(): number
 }
@@ -158,7 +163,21 @@ export function createAiService(deps: AiServiceDeps): AiService {
     return bytes
   }
 
+  // Anything thrown before the run's own error handling still ends the run as failed.
   const execute = async (start: WorkSession): Promise<void> => {
+    try {
+      await translateRun(start)
+    } catch (error) {
+      emit({
+        type: "run-ended",
+        sessionId: start.id,
+        outcome: "failed",
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const translateRun = async (start: WorkSession): Promise<void> => {
     const id = start.id
     const cues = dialogueCues(start)
     const cueById = new Map(cues.map((cue) => [String(cue.index), cue]))
@@ -215,6 +234,14 @@ export function createAiService(deps: AiServiceDeps): AiService {
           break
         case "fix":
           report(`Fixing ${String(event.count)} lines that break a rule`)
+          break
+        case "problem":
+          deps.logProblem?.(
+            start.provider,
+            event.excerpt === undefined
+              ? { tier: event.tier, problem: event.reason }
+              : { tier: event.tier, problem: event.reason, excerpt: event.excerpt },
+          )
           break
         default:
           break

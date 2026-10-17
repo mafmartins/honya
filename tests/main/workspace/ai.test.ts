@@ -66,6 +66,8 @@ interface Setup {
   model?: Completer
   grab?: (videoPath: string, cue: DialogueCue) => Promise<Uint8Array | null>
   rules?: Rule[]
+  // Replaces the completer factory, e.g. to make it throw.
+  completerFor?: () => Completer
 }
 
 function setup(start: WorkSession, options: Setup = {}) {
@@ -86,12 +88,16 @@ function setup(start: WorkSession, options: Setup = {}) {
   const requests: CompletionRequest[] = []
   const grabs: number[] = []
   const model = options.model ?? echo
+  const problems: { provider: string; problem: { tier: string; problem: string } }[] = []
   const ai = createAiService({
     sessions,
-    completerFor: () => async (request) => {
-      requests.push(request)
-      return { ...(await model(request)), spent: SPENT }
-    },
+    completerFor:
+      options.completerFor ??
+      (() => async (request) => {
+        requests.push(request)
+        return { ...(await model(request)), spent: SPENT }
+      }),
+    logProblem: (provider, problem) => problems.push({ provider, problem }),
     grabFrame: (videoPath, cue) => {
       grabs.push(cue.index)
       return options.grab === undefined
@@ -102,7 +108,7 @@ function setup(start: WorkSession, options: Setup = {}) {
     knownRules: () => options.rules ?? [],
     now: () => (clock += 50),
   })
-  return { ai, sessions, events, requests, grabs }
+  return { ai, sessions, events, requests, grabs, problems }
 }
 
 function ended(events: WorkspaceEvent[]): WorkspaceEvent | undefined {
@@ -242,6 +248,36 @@ describe("AI service", () => {
     })
     expect(sessions.get(ID).spend[0]?.requests).toBe(1)
     expect(ai.activeId()).toBeNull()
+  })
+
+  it("ends as failed when the run can't even start its provider", async () => {
+    const { ai, events } = setup(session(3), {
+      completerFor: () => {
+        throw new Error("No key for Gemini.")
+      },
+    })
+    await ai.run(ID)
+    await ai.idle()
+    expect(ended(events)).toEqual({
+      type: "run-ended",
+      sessionId: ID,
+      outcome: "failed",
+      message: "No key for Gemini.",
+    })
+    expect(ai.activeId()).toBeNull()
+  })
+
+  it("logs replies the pipeline couldn't use", async () => {
+    const { ai, problems } = setup(session(3), {
+      model: (request) =>
+        isBrief(request) ? Promise.resolve({ refused: true, reason: "safety" }) : echo(request),
+    })
+    await ai.run(ID)
+    await ai.idle()
+    expect(problems).toContainEqual({
+      provider: "gemini",
+      problem: { tier: "cheap", problem: "brief: safety" },
+    })
   })
 
   it("retranslates a manual line with the hint and adds the spend", async () => {

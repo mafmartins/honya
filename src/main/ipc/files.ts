@@ -32,8 +32,8 @@ export interface PickedExample {
   styles: ListedStyle[]
 }
 
-const ASS_FILTER: FileFilter[] = [{ name: "ASS subtitles", extensions: ["ass"] }]
-const VIDEO_FILTER: FileFilter[] = [
+export const ASS_FILTER: FileFilter[] = [{ name: "ASS subtitles", extensions: ["ass"] }]
+export const VIDEO_FILTER: FileFilter[] = [
   { name: "Video", extensions: ["mkv", "mp4", "webm", "avi", "mov"] },
 ]
 

@@ -127,7 +127,7 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
     const eventIndex = current.eventIndex
     if (!edited) {
       run(async () => {
-        adopt(await api.acceptLine(sessionId, eventIndex, null), eventIndex, false)
+        adopt(await api.acceptReviewLine(sessionId, eventIndex, null), eventIndex, false)
       })
       return
     }
@@ -139,9 +139,9 @@ export function ReviewPanel(props: { sessionId: string; onFinish: () => void }):
         setChecking(false)
         setOffer({ eventIndex, words, proposal: result.proposal })
       } else if (result.status === "none") {
-        adopt(await api.acceptLine(sessionId, eventIndex, words), eventIndex, false)
+        adopt(await api.acceptReviewLine(sessionId, eventIndex, words), eventIndex, false)
       } else {
-        adopt(await api.acceptLine(sessionId, eventIndex, words), eventIndex, true)
+        adopt(await api.acceptReviewLine(sessionId, eventIndex, words), eventIndex, true)
         setFailed(true)
       }
     })

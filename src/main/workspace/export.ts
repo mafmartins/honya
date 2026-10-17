@@ -3,7 +3,7 @@ import { applyTranslations } from "../../core/ass/write"
 import { readSuggestions, suggestionsRequest } from "../../core/library/suggest"
 import type { Correction, Rule } from "../../core/library/types"
 import { proposedOutputPath } from "../../core/pipeline/preflight"
-import type { Completer } from "../../core/pipeline/run"
+import type { Completer, Completion } from "../../core/pipeline/run"
 import type { ProviderId } from "../../core/pipeline/types"
 import { addSpend } from "../../core/providers/prices"
 import { correctionsOf, exportWords, learnableEdits } from "../../core/session/exportFile"
@@ -54,10 +54,16 @@ export function createExportService(deps: ExportDeps): ExportService {
         return result
       }
       const known = deps.knownRules(session.projectId)
-      const reply = await deps.completerFor(session.provider)({
-        tier: "cheap",
-        ...suggestionsRequest(edits, known),
-      })
+      let reply: Completion
+      try {
+        reply = await deps.completerFor(session.provider)({
+          tier: "cheap",
+          ...suggestionsRequest(edits, known),
+        })
+      } catch {
+        // Suggestions are optional: a provider failure still lets the export go ahead.
+        return result
+      }
       const spent = reply.spent
       if (spent !== undefined) {
         const latest = deps.sessions.get(sessionId)
@@ -77,15 +83,16 @@ export function createExportService(deps: ExportDeps): ExportService {
       if (resolve(path) === resolve(session.scriptPath)) {
         throw new Error("Choose a different name: Honya never overwrites the original script.")
       }
-      for (const { owner, rule } of rules) {
-        deps.addRule(owner, rule)
-      }
       const { text, report } = applyTranslations(
         session.scriptText,
         new Set(session.dialogueStyles),
         exportWords(session),
       )
+      // The file comes first, so a failed write saves no rules or corrections.
       deps.writeFile(path, text)
+      for (const { owner, rule } of rules) {
+        deps.addRule(owner, rule)
+      }
       const corrections = correctionsOf(session)
       if (corrections.length > 0) {
         deps.addCorrections(session.projectId, corrections)

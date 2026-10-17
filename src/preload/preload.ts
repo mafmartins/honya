@@ -1,8 +1,32 @@
 import { contextBridge, ipcRenderer } from "electron"
 import { readBaseProfile } from "../core/library/guards"
-import type { HonyaApi } from "../shared/api"
+import {
+  WORKSPACE_EVENT_CHANNEL,
+  workspaceChannel,
+  type HonyaApi,
+  type WorkspaceApi,
+} from "../shared/api"
 import {
   ipcMessage,
+  readAppSettings,
+  readExportPreview,
+  readExportWritten,
+  readKeyTest,
+  readLaunchInfo,
+  readLineView,
+  readModelOptions,
+  readOptionalString,
+  readPickedSessionView,
+  readProjectSummaries,
+  readProjectSummary,
+  readProjectView,
+  readRule,
+  readSessionStats,
+  readSessionSummaries,
+  readSessionSummary,
+  readSessionView,
+  readStyleView,
+  readWorkspaceEvent,
   readBoolean,
   readCheckResult,
   readFinishResult,
@@ -24,7 +48,65 @@ import {
   readUnfinished,
 } from "./readers"
 
+const ws = workspaceChannel
+
+const workspace: WorkspaceApi = {
+  getSettings: () => read(ws("getSettings"), [], readAppSettings),
+  updateSettings: (patch) => read(ws("updateSettings"), [patch], readAppSettings),
+  testKey: (provider, key) => read(ws("testKey"), [provider, key], readKeyTest),
+  modelOptions: (provider) => read(ws("modelOptions"), [provider], readModelOptions),
+  revealLog: () => read(ws("revealLog"), [], readNothing),
+  listProjects: () => read(ws("listProjects"), [], readProjectSummaries),
+  getProject: (id) => read(ws("getProject"), [id], readProjectView),
+  getStyle: (variant) => read(ws("getStyle"), [variant], readStyleView),
+  createProject: (name, variant) => read(ws("createProject"), [name, variant], readProjectSummary),
+  updateProject: (id, patch) => read(ws("updateProject"), [id, patch], readProjectView),
+  deleteProject: (id) => read(ws("deleteProject"), [id], readNothing),
+  updateStyle: (variant, patch) => read(ws("updateStyle"), [variant, patch], readStyleView),
+  saveRules: (owner, rules) => read(ws("saveRules"), [owner, rules], readNothing),
+  addRule: (owner, rule) => read(ws("addRule"), [owner, rule], readNothing),
+  addReference: (owner, name, text, styles) =>
+    read(ws("addReference"), [owner, name, text, styles], readNothing),
+  launchInfo: () => read(ws("launchInfo"), [], readLaunchInfo),
+  recentSessions: () => read(ws("recentSessions"), [], readSessionSummaries),
+  projectSessions: (projectId) => read(ws("projectSessions"), [projectId], readSessionSummaries),
+  newSession: (projectId) => read(ws("newSession"), [projectId], readString),
+  openSession: (id) => read(ws("openSession"), [id], readSessionView),
+  pickScriptForSession: (id) => picked(ws("pickScriptForSession"), [id], readPickedSessionView),
+  confirmStyles: (id, styles) => read(ws("confirmStyles"), [id, styles], readSessionView),
+  editLine: (id, index, words) => read(ws("editLine"), [id, index, words], readLineView),
+  acceptLine: (id, index) => read(ws("acceptLine"), [id, index], readLineView),
+  setSessionOptions: (id, patch) => read(ws("setSessionOptions"), [id, patch], readSessionView),
+  pickVideoForSession: (id) => picked(ws("pickVideoForSession"), [id], readPickedSessionView),
+  detachVideo: (id) => read(ws("detachVideo"), [id], readSessionView),
+  setFinished: (id, value) => read(ws("setFinished"), [id, value], readSessionSummary),
+  runAi: (id) => read(ws("runAi"), [id], readNothing),
+  stopAi: () => read(ws("stopAi"), [], readNothing),
+  aiActive: () => picked(ws("aiActive"), [], readOptionalString),
+  retranslate: (id, index, hint) => read(ws("retranslate"), [id, index, hint], readLineView),
+  draftRule: (id, index) => read(ws("draftRule"), [id, index], readRule),
+  lineFrame: (id, index) => picked(ws("lineFrame"), [id, index], readOptionalString),
+  exportPreview: (id) => read(ws("exportPreview"), [id], readExportPreview),
+  pickExportPath: (defaultPath) => picked(ws("pickExportPath"), [defaultPath], readOptionalString),
+  exportWrite: (id, path, rules) => read(ws("exportWrite"), [id, path, rules], readExportWritten),
+  revealPath: (path) => read(ws("revealPath"), [path], readNothing),
+  sessionStats: (id) => read(ws("sessionStats"), [id], readSessionStats),
+  onWorkspaceEvent(listener) {
+    const handler = (_event: unknown, value: unknown): void => {
+      const event = readWorkspaceEvent(value)
+      if (event !== null) {
+        listener(event)
+      }
+    }
+    ipcRenderer.on(WORKSPACE_EVENT_CHANNEL, handler)
+    return () => {
+      ipcRenderer.removeListener(WORKSPACE_EVENT_CHANNEL, handler)
+    }
+  },
+}
+
 const honya: HonyaApi = {
+  ...workspace,
   pickScript: () => picked("honya:pick-script", [], readPickedScript),
   pickVideo: () => picked("honya:pick-video", [], readPickedVideo),
   pickExample: () => picked("honya:pick-example", [], readPickedExample),
@@ -62,7 +144,7 @@ const honya: HonyaApi = {
   latestUnfinished: () => picked("honya:translate-latest", [], readUnfinished),
   discardTranslation: (id) => read("honya:translate-discard", [id], readNothing),
   loadReview: (id) => read("honya:review-load", [id], readReviewView),
-  acceptLine: (id, eventIndex, words) =>
+  acceptReviewLine: (id, eventIndex, words) =>
     read("honya:review-accept", [id, eventIndex, words], readReviewView),
   checkEdit: (id, eventIndex, words) =>
     read("honya:review-check", [id, eventIndex, words], readCheckResult),

@@ -49,8 +49,8 @@ function mount(api: HonyaApi, onFinish: () => void = () => undefined): void {
 
 describe("review panel", () => {
   it("shows the header and the first flag, and accepts it unchanged", async () => {
-    const acceptLine = vi.fn(() => Promise.resolve(ONE_LEFT))
-    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), acceptLine }))
+    const acceptReviewLine = vi.fn(() => Promise.resolve(ONE_LEFT))
+    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), acceptReviewLine }))
     await screen.findByText("Frieren · subs.ass · 2 flags")
     expect(screen.getByText("pt-pt · save")).toBeTruthy()
     expect(screen.getByText("{note: note 2}")).toBeTruthy()
@@ -58,7 +58,7 @@ describe("review panel", () => {
     expect(screen.getByRole("button", { name: "Finish" }).hasAttribute("disabled")).toBe(true)
     fireEvent.click(screen.getByRole("button", { name: "Accept" }))
     await waitFor(() => {
-      expect(acceptLine).toHaveBeenCalledWith("session-1", 2, null)
+      expect(acceptReviewLine).toHaveBeenCalledWith("session-1", 2, null)
     })
     await waitFor(() => {
       expect(screen.getByLabelText<HTMLTextAreaElement>("translation").value).toBe("Words 4")
@@ -81,8 +81,8 @@ describe("review panel", () => {
           release = resolve
         }),
     )
-    const acceptLine = vi.fn(() => Promise.resolve(ONE_LEFT))
-    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), checkEdit, acceptLine }))
+    const acceptReviewLine = vi.fn(() => Promise.resolve(ONE_LEFT))
+    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), checkEdit, acceptReviewLine }))
     const box = await screen.findByLabelText("translation")
     fireEvent.change(box, { target: { value: "Changed" } })
     fireEvent.click(screen.getByRole("button", { name: "Accept" }))
@@ -90,7 +90,7 @@ describe("review panel", () => {
     expect(screen.getByRole("button", { name: "Accept" }).hasAttribute("disabled")).toBe(true)
     release({ status: "none" })
     await waitFor(() => {
-      expect(acceptLine).toHaveBeenCalledWith("session-1", 2, "Changed")
+      expect(acceptReviewLine).toHaveBeenCalledWith("session-1", 2, "Changed")
     })
   })
 
@@ -135,18 +135,18 @@ describe("review panel", () => {
   })
 
   it("keeps the edit with a note when the check fails", async () => {
-    const acceptLine = vi.fn(() => Promise.resolve(ONE_LEFT))
+    const acceptReviewLine = vi.fn(() => Promise.resolve(ONE_LEFT))
     mount(
       fakeApi({
         loadReview: () => Promise.resolve(TWO_FLAGS),
         checkEdit: () => Promise.resolve({ status: "failed" }),
-        acceptLine,
+        acceptReviewLine,
       }),
     )
     fireEvent.change(await screen.findByLabelText("translation"), { target: { value: "Changed" } })
     fireEvent.click(screen.getByRole("button", { name: "Accept" }))
     await screen.findByText("The check couldn't run. Your edit is kept on this line only.")
-    expect(acceptLine).toHaveBeenCalledWith("session-1", 2, "Changed")
+    expect(acceptReviewLine).toHaveBeenCalledWith("session-1", 2, "Changed")
     expect(screen.getByRole("button", { name: "Retry check" })).toBeTruthy()
     expect(screen.getByLabelText<HTMLTextAreaElement>("translation").value).toBe("Changed")
   })
@@ -156,7 +156,7 @@ describe("review panel", () => {
     mount(
       fakeApi({
         loadReview: () => Promise.resolve(view([line(2, true), line(3, false)])),
-        acceptLine: () => Promise.resolve(view([line(2, true, true), line(3, false)])),
+        acceptReviewLine: () => Promise.resolve(view([line(2, true, true), line(3, false)])),
       }),
       onFinish,
     )
@@ -170,8 +170,8 @@ describe("review panel", () => {
   })
 
   it("moves among flags and accepts an edit on an unflagged line from the list", async () => {
-    const acceptLine = vi.fn(() => Promise.resolve(NONE_LEFT))
-    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), acceptLine }))
+    const acceptReviewLine = vi.fn(() => Promise.resolve(NONE_LEFT))
+    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), acceptReviewLine }))
     await screen.findByLabelText("translation")
     fireEvent.click(screen.getByRole("button", { name: "Next flag" }))
     expect(screen.getByLabelText<HTMLTextAreaElement>("translation").value).toBe("Words 4")
@@ -184,7 +184,7 @@ describe("review panel", () => {
     fireEvent.change(box, { target: { value: "Edited 3" } })
     fireEvent.click(screen.getByRole("button", { name: "Accept" }))
     await waitFor(() => {
-      expect(acceptLine).toHaveBeenCalledWith("session-1", 3, "Edited 3")
+      expect(acceptReviewLine).toHaveBeenCalledWith("session-1", 3, "Edited 3")
     })
   })
 
@@ -224,14 +224,14 @@ describe("review panel", () => {
   })
 
   it("does not accept or confirm anything on Cancel", async () => {
-    const acceptLine = vi.fn(() => Promise.resolve(ONE_LEFT))
+    const acceptReviewLine = vi.fn(() => Promise.resolve(ONE_LEFT))
     const confirmEdit = vi.fn(() => Promise.resolve(ONE_LEFT))
     mount(
       fakeApi({
         loadReview: () => Promise.resolve(TWO_FLAGS),
         checkEdit: () =>
           Promise.resolve({ status: "proposal", proposal: { siblings: [], rule: null } }),
-        acceptLine,
+        acceptReviewLine,
         confirmEdit,
       }),
     )
@@ -239,7 +239,7 @@ describe("review panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Accept" }))
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }))
     await screen.findByLabelText("translation")
-    expect(acceptLine).not.toHaveBeenCalled()
+    expect(acceptReviewLine).not.toHaveBeenCalled()
     expect(confirmEdit).not.toHaveBeenCalled()
   })
 
@@ -248,14 +248,14 @@ describe("review panel", () => {
       .fn<HonyaApi["checkEdit"]>()
       .mockResolvedValueOnce({ status: "failed" })
       .mockResolvedValue({ status: "none" })
-    const acceptLine = vi.fn(() => Promise.resolve(ONE_LEFT))
-    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), checkEdit, acceptLine }))
+    const acceptReviewLine = vi.fn(() => Promise.resolve(ONE_LEFT))
+    mount(fakeApi({ loadReview: () => Promise.resolve(TWO_FLAGS), checkEdit, acceptReviewLine }))
     fireEvent.change(await screen.findByLabelText("translation"), { target: { value: "Changed" } })
     fireEvent.click(screen.getByRole("button", { name: "Accept" }))
     fireEvent.click(await screen.findByRole("button", { name: "Retry check" }))
     await waitFor(() => {
       expect(screen.queryByText(/The check couldn't run/)).toBeNull()
     })
-    expect(acceptLine).toHaveBeenCalledWith("session-1", 2, "Changed")
+    expect(acceptReviewLine).toHaveBeenCalledWith("session-1", 2, "Changed")
   })
 })

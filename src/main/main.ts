@@ -7,17 +7,19 @@ import { fileURLToPath } from "node:url"
 import type { DialogueCue } from "../core/ass/script"
 import { grabFrame } from "../core/frames/grab"
 import { bundledFfmpegPath, devFfmpegPath } from "../core/frames/path"
-import { compileCard } from "../core/library/card"
-import { createFileStore } from "../core/library/fileStore"
-import type { StyleCard } from "../core/library/types"
+import { compileCard, emptyBase } from "../core/library/card"
+import { createFileStore, type FileProfileStore } from "../core/library/fileStore"
+import type { Rule, SeriesProfile, StyleCard } from "../core/library/types"
 import type { Completer } from "../core/pipeline/run"
 import type { ProviderId, Variant } from "../core/pipeline/types"
 import { completeJson, completeText, type ChatInput } from "../core/providers/complete"
 import { providerError } from "../core/providers/errors"
+import { testKey } from "../core/providers/keyTest"
 import { withRetry } from "../core/providers/retry"
 import { createProfileHandlers, type ProfileHandlers } from "./ipc/profiles"
 import { registerSetupIpc } from "./ipc/register"
 import { registerTranslateIpc } from "./ipc/translate"
+import { registerWorkspaceIpc } from "./ipc/workspace"
 import { createModelStore, type ModelStore } from "./modelStore"
 import { createSecretStore, type SecretStore } from "./secrets"
 import { createLearner } from "./learn"
@@ -25,6 +27,16 @@ import { createReviewHandlers } from "./translate/review"
 import { createRunner, type TranslateEvent } from "./translate/runner"
 import { createSessionStore } from "./translate/session"
 import { callEntry, problemEntry } from "./providerLog"
+import { createSettingsStore } from "./settingsStore"
+import { createAiService, type AiService, type WorkspaceEvent } from "./workspace/ai"
+import { createExportService } from "./workspace/export"
+import { createProjectService } from "./workspace/projects"
+import { createWorkSessions, type WorkSessions } from "./workspace/sessions"
+import { WORKSPACE_EVENT_CHANNEL } from "../shared/api"
+import type { FileFilter } from "./ipc/files"
+
+// How long quitting waits for a running AI to stop after its current batch.
+const QUIT_WAIT_MS = 5000
 
 function boot(): void {
   const secrets = createSecretStore(safeStorage, { read: readKeyFile, write: writeKeyFile })
@@ -84,12 +96,168 @@ function boot(): void {
     sessions,
     readScript: (path) => readFileSync(path, "utf8"),
   })
+  const ai = bootWorkspace(store, profiles, secrets, models)
+  let quitting = false
+  app.on("before-quit", (event) => {
+    if (quitting || ai.activeId() === null) {
+      return
+    }
+    event.preventDefault()
+    quitting = true
+    ai.stop()
+    void Promise.race([ai.idle(), sleep(QUIT_WAIT_MS)]).finally(() => {
+      app.quit()
+    })
+  })
   openWindow()
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       openWindow()
     }
   })
+}
+
+// The workspace services: projects, v3 sessions, the AI and export. Returns the AI
+// so quitting can stop a run.
+function bootWorkspace(
+  store: FileProfileStore,
+  profiles: ProfileHandlers,
+  secrets: SecretStore,
+  models: ModelStore,
+): AiService {
+  const settings = createSettingsStore({ read: readSettingsFile, write: writeSettingsFile })
+  // The project service counts sessions and sessions name their project, so each
+  // reaches the other through a closure; the session side reads the profile store
+  // directly, so neither call loops back.
+  const projects = createProjectService(
+    store,
+    (projectId) => sessions.countFor(projectId),
+    () => settings.get(),
+  )
+  const sessions: WorkSessions = createWorkSessions(join(app.getPath("userData"), "sessions"), {
+    now: () => Date.now(),
+    newId: () => randomUUID(),
+    projectName: (id) => findSeries(store, id)?.name ?? "Deleted project",
+    card: (projectId) => {
+      const series = requireSeries(store, projectId)
+      return compileCard(store.loadBase(series.variant) ?? emptyBase(series.variant), series)
+    },
+    readScript: (path) => readFileSync(path, "utf8").replace(/^\uFEFF/, ""),
+    settings: () => settings.get(),
+    project: (id) => {
+      const series = requireSeries(store, id)
+      const { defaults } = settings.get()
+      return {
+        preset: series.preset ?? defaults.preset,
+        frameSetting: series.frameSetting ?? defaults.frameSetting,
+        variant: series.variant,
+      }
+    },
+  })
+  const { skipped } = sessions.migrate()
+  for (const reason of skipped) {
+    logLine(JSON.stringify({ time: new Date().toISOString(), migrationSkipped: reason }))
+  }
+  const knownRules = (projectId: string): Rule[] =>
+    projects.knownRules({ kind: "project", id: projectId })
+  const ai = createAiService({
+    sessions,
+    completerFor: (provider, onRetry) =>
+      withRetry(
+        (request) => completeWithProvider(secrets, models, provider, request),
+        sleep,
+        onRetry,
+      ),
+    grabFrame: (videoPath, cue) =>
+      ffmpegReady()
+        ? grabFrame({
+            ffmpegPath: ffmpegLocation(),
+            videoPath,
+            startMs: cue.startMs,
+            endMs: cue.endMs,
+            run: runFfmpeg,
+          })
+        : Promise.resolve(null),
+    emit: emitWorkspace,
+    knownRules,
+    logProblem: (provider, problem) => {
+      logLine(problemEntry({ time: new Date().toISOString(), provider, ...problem }))
+    },
+  })
+  const exporter = createExportService({
+    sessions,
+    completerFor: (provider) => (request) =>
+      completeWithProvider(secrets, models, provider, request),
+    knownRules,
+    addCorrections: (projectId, corrections) => {
+      const series = requireSeries(store, projectId)
+      profiles.addCorrections(series.variant, series.id, corrections)
+    },
+    addRule: (owner, rule) => {
+      projects.addRule(owner, rule)
+    },
+    writeFile: (path, text) => {
+      writeFileSync(path, text, "utf8")
+    },
+    now: () => Date.now(),
+  })
+  registerWorkspaceIpc({
+    settings,
+    secrets,
+    models,
+    projects,
+    sessions,
+    ai,
+    exporter,
+    open: openFile,
+    saveFile,
+    testKey: (provider, key, model) => testKey(provider, key, fetch, model),
+    revealLog: () => {
+      shell.showItemInFolder(providerLogPath())
+    },
+    reveal: (path) => {
+      shell.showItemInFolder(path)
+    },
+  })
+  return ai
+}
+
+function findSeries(store: FileProfileStore, id: string): SeriesProfile | null {
+  for (const variant of ["pt-pt", "pt-br"] as const) {
+    const found = store.listSeries(variant).find((series) => series.id === id)
+    if (found !== undefined) {
+      return found
+    }
+  }
+  return null
+}
+
+function requireSeries(store: FileProfileStore, id: string): SeriesProfile {
+  const series = findSeries(store, id)
+  if (series === null) {
+    throw new Error("That project no longer exists.")
+  }
+  return series
+}
+
+function emitWorkspace(event: WorkspaceEvent): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.webContents.isDestroyed()) {
+      window.webContents.send(WORKSPACE_EVENT_CHANNEL, event)
+    }
+  }
+}
+
+async function saveFile(defaultPath: string, filters: FileFilter[]): Promise<string | null> {
+  const options = { defaultPath, filters }
+  const parent = BrowserWindow.getFocusedWindow()
+  const result = await (parent === null
+    ? dialog.showSaveDialog(options)
+    : dialog.showSaveDialog(parent, options))
+  if (result.canceled) {
+    return null
+  }
+  return result.filePath === "" ? null : result.filePath
 }
 
 function emitToWindows(event: TranslateEvent): void {
@@ -124,6 +292,21 @@ async function openFile(filters: { name: string; extensions: string[] }[]): Prom
     return null
   }
   return result.filePaths[0] ?? null
+}
+
+function settingsPath(): string {
+  return join(app.getPath("userData"), "settings.json")
+}
+
+function readSettingsFile(): string | null {
+  const file = settingsPath()
+  return existsSync(file) ? readFileSync(file, "utf8") : null
+}
+
+function writeSettingsFile(text: string): void {
+  const file = settingsPath()
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, text, "utf8")
 }
 
 function modelPath(): string {
@@ -239,12 +422,21 @@ async function completeWithProvider(
 // explained. Logging never breaks a translation.
 function logLine(entry: string): void {
   try {
-    const folder = join(app.getPath("userData"), "logs")
-    mkdirSync(folder, { recursive: true })
-    appendFileSync(join(folder, "providers.log"), `${entry}\n`, "utf8")
+    appendFileSync(providerLogPath(), `${entry}\n`, "utf8")
   } catch {
     // ignore: the log is only a diagnostic
   }
+}
+
+// The log file, with its folder and an empty file made if missing so it can be shown.
+function providerLogPath(): string {
+  const folder = join(app.getPath("userData"), "logs")
+  const file = join(folder, "providers.log")
+  mkdirSync(folder, { recursive: true })
+  if (!existsSync(file)) {
+    writeFileSync(file, "", "utf8")
+  }
+  return file
 }
 
 async function askCheap(

@@ -119,6 +119,19 @@ export function fakeApi(
         rules: [{ kind: "prose", text: "Keep -san and -sama." }],
         pairs: 250,
       }),
+    combineLearned: (_provider, learned) =>
+      Promise.resolve({
+        suggestions: [
+          {
+            rule: { kind: "glossary", source: "Hashira", pt: "Pilar" },
+            episodes: learned.length,
+            alternatives: ["Hashira"],
+          },
+          { rule: { kind: "prose", text: "Keep -san and -sama." }, episodes: 1, alternatives: [] },
+        ],
+        episodes: learned.length,
+        pairs: learned.reduce((sum, item) => sum + item.pairs, 0),
+      }),
     prepareTranslation: () =>
       Promise.resolve({
         styles: [{ name: "Default", guess: "dialogue" }],

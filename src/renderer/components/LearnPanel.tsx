@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import {
   PROVIDERS,
+  type Combined,
   type Learned,
   type LearnScript,
   type PickedExample,
@@ -9,22 +10,28 @@ import {
   type Variant,
 } from "../../shared/api"
 import { useAction } from "../action"
-import { useApi } from "../api"
+import { errorMessage, useApi } from "../api"
 import { formatRule } from "../format"
 import { StyleChecklist } from "./StyleChecklist"
 
-type Step =
-  | { kind: "idle" }
-  | { kind: "pt-styles"; picked: PickedExample }
-  | { kind: "ready"; pt: Named; en: Named | null }
-  | { kind: "en-styles"; pt: Named; picked: PickedExample }
-  | { kind: "learning"; pt: Named; en: Named | null }
-  | { kind: "proposals"; learned: Learned; chosen: Set<number> }
-
 type Named = LearnScript & { name: string }
 
-// Reads an episode the translator already did and offers glossary entries and rules
-// for the series. Proposals are checked by default; only the kept ones are saved.
+interface Episode {
+  pt: Named
+  en: Named | null
+}
+
+// Where a picked file goes once its dialogue styles are known.
+type Target = { kind: "pt" } | { kind: "en"; index: number }
+
+type Phase =
+  | { kind: "edit" }
+  | { kind: "learning"; text: string }
+  | { kind: "proposals"; combined: Combined; chosen: Set<number>; skipped: string[] }
+
+// Reads episodes the translator already did and offers glossary entries and rules for
+// the series. With several episodes, suggestions are ranked by how many episodes show
+// them, and only those seen more than once start ticked.
 export function LearnPanel(props: {
   variant: Variant
   seriesId: string
@@ -33,7 +40,10 @@ export function LearnPanel(props: {
 }): React.JSX.Element {
   const api = useApi()
   const act = useAction()
-  const [step, setStep] = useState<Step>({ kind: "idle" })
+  const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [styles, setStyles] = useState<string[] | null>(null)
+  const [pending, setPending] = useState<{ picked: PickedExample; target: Target } | null>(null)
+  const [phase, setPhase] = useState<Phase>({ kind: "edit" })
   const [providers, setProviders] = useState<ProviderId[]>([])
   const [provider, setProvider] = useState<ProviderId | null>(null)
 
@@ -53,35 +63,88 @@ export function LearnPanel(props: {
   }, [api])
 
   const reset = (): void => {
-    setStep({ kind: "idle" })
+    setEpisodes([])
+    setPending(null)
+    setPhase({ kind: "edit" })
   }
 
-  if (step.kind === "idle") {
-    return (
-      <div className="learn">
-        <button
-          type="button"
-          onClick={() => {
-            act(async () => {
-              const picked = await api.pickExample()
-              if (picked !== null) {
-                setStep({ kind: "pt-styles", picked })
-              }
-            })
-          }}
-        >
-          Learn from a translated episode…
-        </button>
-        <p className="muted">
-          Reads one of your finished episodes and suggests glossary entries and rules for this
-          series. You choose what to keep.
-        </p>
-      </div>
+  const place = (named: Named, target: Target): void => {
+    setEpisodes((current) =>
+      target.kind === "pt"
+        ? [...current, { pt: named, en: null }]
+        : current.map((episode, index) =>
+            index === target.index ? { ...episode, en: named } : episode,
+          ),
     )
   }
 
-  if (step.kind === "pt-styles" || step.kind === "en-styles") {
-    const picked = step.picked
+  // A file with the styles already chosen reuses them; anything else asks.
+  const pick = (target: Target): void => {
+    act(async () => {
+      const picked = await api.pickExample()
+      if (picked === null) {
+        return
+      }
+      const names = new Set(picked.styles.map((style) => style.name))
+      const reuse = styles?.filter((style) => names.has(style)) ?? []
+      if (reuse.length > 0) {
+        place({ name: picked.name, text: picked.text, dialogueStyles: reuse }, target)
+      } else {
+        setPending({ picked, target })
+      }
+    })
+  }
+
+  const learn = (chosenProvider: ProviderId): void => {
+    act(async () => {
+      const learned: Learned[] = []
+      const skipped: string[] = []
+      for (const [index, episode] of episodes.entries()) {
+        setPhase({
+          kind: "learning",
+          text:
+            episodes.length === 1
+              ? "Reading the episode…"
+              : `Reading episode ${String(index + 1)} of ${String(episodes.length)}…`,
+        })
+        try {
+          learned.push(
+            await api.learnFromScript(
+              props.variant,
+              props.seriesId,
+              chosenProvider,
+              script(episode.pt),
+              episode.en === null ? null : script(episode.en),
+            ),
+          )
+        } catch (error) {
+          skipped.push(`${episode.pt.name}: ${errorMessage(error)}`)
+        }
+      }
+      if (learned.length === 0) {
+        setPhase({ kind: "edit" })
+        throw new Error(skipped.join(" "))
+      }
+      if (learned.length > 1) {
+        setPhase({ kind: "learning", text: "Combining what the episodes have in common…" })
+      }
+      try {
+        const combined = await api.combineLearned(chosenProvider, learned)
+        const chosen = new Set(
+          combined.suggestions.flatMap((suggestion, index) =>
+            combined.episodes === 1 || suggestion.episodes > 1 ? [index] : [],
+          ),
+        )
+        setPhase({ kind: "proposals", combined, chosen, skipped })
+      } catch (error) {
+        setPhase({ kind: "edit" })
+        throw error
+      }
+    })
+  }
+
+  if (pending !== null) {
+    const { picked, target } = pending
     return (
       <div className="learn">
         <p>{`Which styles are dialogue in ${picked.name}?`}</p>
@@ -89,160 +152,212 @@ export function LearnPanel(props: {
           styles={picked.styles}
           confirmLabel="Use these styles"
           onCancel={() => {
-            setStep(
-              step.kind === "pt-styles"
-                ? { kind: "idle" }
-                : { kind: "ready", pt: step.pt, en: null },
-            )
+            setPending(null)
           }}
           onConfirm={(dialogueStyles) => {
-            const named = { name: picked.name, text: picked.text, dialogueStyles }
-            setStep(
-              step.kind === "pt-styles"
-                ? { kind: "ready", pt: named, en: null }
-                : { kind: "ready", pt: step.pt, en: named },
-            )
+            if (styles === null) {
+              setStyles(dialogueStyles)
+            }
+            place({ name: picked.name, text: picked.text, dialogueStyles }, target)
+            setPending(null)
           }}
         />
       </div>
     )
   }
 
-  if (step.kind === "ready" || step.kind === "learning") {
-    const learning = step.kind === "learning"
+  if (phase.kind === "proposals") {
+    return (
+      <Proposals
+        phase={phase}
+        onToggle={(index) => {
+          const chosen = new Set(phase.chosen)
+          if (chosen.has(index)) {
+            chosen.delete(index)
+          } else {
+            chosen.add(index)
+          }
+          setPhase({ ...phase, chosen })
+        }}
+        onSave={(kept) => {
+          props.onSave([...props.rules, ...kept])
+          reset()
+        }}
+        onDiscard={reset}
+      />
+    )
+  }
+
+  if (episodes.length === 0) {
     return (
       <div className="learn">
-        <p>{`Translated episode: ${step.pt.name}`}</p>
-        {step.en === null ? (
-          <p>
-            <button
-              type="button"
-              disabled={learning}
-              onClick={() => {
-                act(async () => {
-                  const picked = await api.pickExample()
-                  if (picked !== null) {
-                    setStep({ kind: "en-styles", pt: step.pt, picked })
-                  }
-                })
-              }}
-            >
-              Add the English script…
-            </button>{" "}
-            <span className="muted">
-              Optional. With it, terms are matched line by line instead of guessed.
-            </span>
-          </p>
-        ) : (
-          <p>{`English script: ${step.en.name}`}</p>
-        )}
-        {providers.length === 0 ? (
-          <p className="muted">Add a provider key above to learn from scripts.</p>
-        ) : (
-          <label>
-            <span>provider</span>{" "}
-            <select
-              id="learn-provider"
-              aria-label="provider"
-              value={provider ?? ""}
-              disabled={learning}
-              onChange={(event) => {
-                const next = PROVIDERS.find((id) => id === event.target.value)
-                setProvider(next ?? null)
-              }}
-            >
-              {providers.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <p>
-          <button
-            type="button"
-            className="action"
-            disabled={learning || provider === null}
-            onClick={() => {
-              if (provider === null) {
-                return
-              }
-              const { pt, en } = step
-              setStep({ kind: "learning", pt, en })
-              act(async () => {
-                try {
-                  const learned = await api.learnFromScript(
-                    props.variant,
-                    props.seriesId,
-                    provider,
-                    script(pt),
-                    en === null ? null : script(en),
-                  )
-                  const total = learned.glossary.length + learned.rules.length
-                  setStep({
-                    kind: "proposals",
-                    learned,
-                    chosen: new Set(Array.from({ length: total }, (_, i) => i)),
-                  })
-                } catch (error) {
-                  setStep({ kind: "ready", pt, en })
-                  throw error
-                }
-              })
-            }}
-          >
-            {learning ? "Reading the episode…" : "Learn"}
-          </button>{" "}
-          <button type="button" disabled={learning} onClick={reset}>
-            Cancel
-          </button>
+        <button
+          type="button"
+          onClick={() => {
+            pick({ kind: "pt" })
+          }}
+        >
+          Learn from translated episodes…
+        </button>
+        <p className="muted">
+          Reads episodes you already translated and suggests glossary entries and rules for this
+          series. You choose what to keep.
         </p>
       </div>
     )
   }
 
-  const { learned, chosen } = step
-  const proposals: Rule[] = [...learned.glossary, ...learned.rules]
-  if (proposals.length === 0) {
+  const learning = phase.kind === "learning"
+  return (
+    <div className="learn">
+      <p>Translated episodes</p>
+      <ul className="episodes">
+        {episodes.map((episode, index) => (
+          <li key={`${String(index)}-${episode.pt.name}`}>
+            <span>{episode.pt.name}</span>{" "}
+            {episode.en === null ? (
+              <button
+                type="button"
+                disabled={learning}
+                aria-label={`Add the English script for ${episode.pt.name}`}
+                onClick={() => {
+                  pick({ kind: "en", index })
+                }}
+              >
+                Add English…
+              </button>
+            ) : (
+              <span className="muted">{`with ${episode.en.name}`}</span>
+            )}{" "}
+            <button
+              type="button"
+              disabled={learning}
+              aria-label={`Remove ${episode.pt.name}`}
+              onClick={() => {
+                setEpisodes((current) => current.filter((_, at) => at !== index))
+              }}
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p>
+        <button
+          type="button"
+          disabled={learning}
+          onClick={() => {
+            pick({ kind: "pt" })
+          }}
+        >
+          Add another episode…
+        </button>{" "}
+        <span className="muted">
+          The English script is optional; with it, terms are matched line by line instead of
+          guessed.
+        </span>
+      </p>
+      {providers.length === 0 ? (
+        <p className="muted">Add a provider key above to learn from scripts.</p>
+      ) : (
+        <label>
+          <span>provider</span>{" "}
+          <select
+            id="learn-provider"
+            aria-label="provider"
+            value={provider ?? ""}
+            disabled={learning}
+            onChange={(event) => {
+              setProvider(PROVIDERS.find((id) => id === event.target.value) ?? null)
+            }}
+          >
+            {providers.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <p>
+        <button
+          type="button"
+          className="action"
+          disabled={learning || provider === null}
+          onClick={() => {
+            if (provider !== null) {
+              learn(provider)
+            }
+          }}
+        >
+          {learning
+            ? phase.text
+            : episodes.length === 1
+              ? "Learn"
+              : `Learn from ${String(episodes.length)} episodes`}
+        </button>{" "}
+        <button type="button" disabled={learning} onClick={reset}>
+          Cancel
+        </button>
+      </p>
+    </div>
+  )
+}
+
+function Proposals(props: {
+  phase: Extract<Phase, { kind: "proposals" }>
+  onToggle: (index: number) => void
+  onSave: (kept: Rule[]) => void
+  onDiscard: () => void
+}): React.JSX.Element {
+  const { combined, chosen, skipped } = props.phase
+  const several = combined.episodes > 1
+  const skippedNote =
+    skipped.length === 0 ? null : <p className="muted">{`Skipped ${skipped.join(" ")}`}</p>
+  if (combined.suggestions.length === 0) {
     return (
       <div className="learn">
-        <p>Nothing new to suggest: the series rules already cover what this episode shows.</p>
-        <button type="button" onClick={reset}>
+        {skippedNote}
+        <p>Nothing new to suggest: the series rules already cover what these episodes show.</p>
+        <button type="button" onClick={props.onDiscard}>
           Done
         </button>
       </div>
     )
   }
-  const toggle = (index: number): void => {
-    const next = new Set(chosen)
-    if (next.has(index)) {
-      next.delete(index)
-    } else {
-      next.add(index)
-    }
-    setStep({ kind: "proposals", learned, chosen: next })
-  }
+  const source =
+    combined.pairs > 0
+      ? `${String(combined.pairs)} matched lines`
+      : "your Portuguese alone, so check the English terms"
   return (
     <div className="learn">
+      {skippedNote}
       <p>
-        {learned.pairs > 0
-          ? `Suggestions from ${String(learned.pairs)} matched lines. Untick what you don't want.`
-          : "Suggestions from your Portuguese alone, so check the English terms. Untick what you don't want."}
+        {several
+          ? `Suggestions from ${String(combined.episodes)} episodes (${source}). Ones seen in more than one episode are ticked.`
+          : `Suggestions from ${source}. Untick what you don't want.`}
       </p>
       <ul className="proposals">
-        {proposals.map((rule, index) => (
+        {combined.suggestions.map((suggestion, index) => (
           <li key={index}>
             <label className="picked">
               <input
                 type="checkbox"
                 checked={chosen.has(index)}
                 onChange={() => {
-                  toggle(index)
+                  props.onToggle(index)
                 }}
               />
-              {formatRule(rule)}
+              {formatRule(suggestion.rule)}
             </label>
+            {several ? (
+              <span className="muted">
+                {` · ${String(suggestion.episodes)} of ${String(combined.episodes)} episodes`}
+                {suggestion.alternatives.length > 0
+                  ? ` · also ${suggestion.alternatives.join(", ")}`
+                  : ""}
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -251,13 +366,16 @@ export function LearnPanel(props: {
         className="action"
         disabled={chosen.size === 0}
         onClick={() => {
-          props.onSave([...props.rules, ...proposals.filter((_, index) => chosen.has(index))])
-          reset()
+          props.onSave(
+            combined.suggestions.flatMap((suggestion, index) =>
+              chosen.has(index) ? [suggestion.rule] : [],
+            ),
+          )
         }}
       >
         {`Save ${String(chosen.size)} to the series`}
       </button>{" "}
-      <button type="button" onClick={reset}>
+      <button type="button" onClick={props.onDiscard}>
         Discard
       </button>
     </div>

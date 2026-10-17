@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest"
 import type { DialogueCue } from "../../src/core/ass/script"
-import { dialogueOf, learnRequest, pairLines, readLearned } from "../../src/core/library/learn"
+import {
+  combineGlossary,
+  combineRulesExactly,
+  dialogueOf,
+  learnRequest,
+  mergeRequest,
+  pairLines,
+  rankSuggestions,
+  readLearned,
+  readMerged,
+} from "../../src/core/library/learn"
 
 function cue(index: number, startMs: number, visible: string): DialogueCue {
   return {
@@ -94,5 +104,78 @@ describe("reading what was learned", () => {
       pairs: 12,
     })
     expect(readLearned([], [], 0)).toBe("the reply is not an object")
+  })
+})
+
+describe("combining episodes", () => {
+  const episode = (glossary: [string, string][], rules: string[], pairs = 10) => ({
+    glossary: glossary.map(([source, pt]) => ({ kind: "glossary" as const, source, pt })),
+    rules: rules.map((text) => ({ kind: "prose" as const, text })),
+    pairs,
+  })
+
+  it("keeps the glossary form most episodes used and lists the others", () => {
+    expect(
+      combineGlossary([
+        episode(
+          [
+            ["Hashira", "Pilar"],
+            ["Nichirin", "Nichirin"],
+          ],
+          [],
+        ),
+        episode([["hashira", "Pilar"]], []),
+        episode([["Hashira", "Hashira"]], []),
+      ]),
+    ).toEqual([
+      {
+        rule: { kind: "glossary", source: "Hashira", pt: "Pilar" },
+        episodes: 2,
+        alternatives: ["Hashira"],
+      },
+      {
+        rule: { kind: "glossary", source: "Nichirin", pt: "Nichirin" },
+        episodes: 1,
+        alternatives: [],
+      },
+    ])
+  })
+
+  it("counts identical rules once per episode", () => {
+    expect(
+      combineRulesExactly([episode([], ["Use tu.", "use  TU."]), episode([], ["Use tu."])]),
+    ).toEqual([{ rule: { kind: "prose", text: "Use tu." }, episodes: 2, alternatives: [] }])
+  })
+
+  it("asks to merge rules episode by episode and reads the counts", () => {
+    const request = mergeRequest([episode([], ["Keep -san."]), episode([], [])])
+    expect(request.prompt).toBe("Episode 1:\n- Keep -san.\n\nEpisode 2:\n(no rules)")
+    expect(
+      readMerged(
+        {
+          rules: [
+            { text: "Keep honorifics.", episodes: 9 },
+            { text: "x", episodes: 0 },
+          ],
+        },
+        2,
+      ),
+    ).toEqual([
+      { rule: { kind: "prose", text: "Keep honorifics." }, episodes: 2, alternatives: [] },
+      { rule: { kind: "prose", text: "x" }, episodes: 1, alternatives: [] },
+    ])
+  })
+
+  it("ranks by support, glossary first when tied", () => {
+    const ranked = rankSuggestions([
+      { rule: { kind: "prose", text: "a" }, episodes: 2, alternatives: [] },
+      { rule: { kind: "glossary", source: "b", pt: "b" }, episodes: 2, alternatives: [] },
+      { rule: { kind: "prose", text: "c" }, episodes: 3, alternatives: [] },
+    ])
+    expect(ranked.map((s) => (s.rule.kind === "prose" ? s.rule.text : s.rule.source))).toEqual([
+      "c",
+      "b",
+      "a",
+    ])
   })
 })

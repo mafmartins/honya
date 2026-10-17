@@ -6,6 +6,7 @@ import {
   readBoolean,
   readCheckResult,
   readFinishResult,
+  readCombined,
   readLearned,
   readLoadedBase,
   readModelPair,
@@ -51,6 +52,8 @@ const honya: HonyaApi = {
       [variant, seriesId, provider, portuguese, english],
       readLearned,
     ),
+  combineLearned: (provider, learned) =>
+    read("honya:combine-learned", [provider, learned], readCombined),
   prepareTranslation: (scriptPath, variant) =>
     read("honya:translate-prepare", [scriptPath, variant], readPreparedScript),
   startTranslation: (request) => read("honya:translate-start", [request], readString),

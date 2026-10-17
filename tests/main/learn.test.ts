@@ -55,4 +55,67 @@ describe("learning from a translated episode", () => {
       "The model's reply couldn't be used (busy). Try again.",
     )
   })
+
+  it("combines episodes, merging rules with one cheap request", async () => {
+    const requests: CompletionRequest[] = []
+    const combined = await learner(
+      { rules: [{ text: "Keep honorifics like -san.", episodes: 2 }] },
+      requests,
+    ).combine("gemini", [
+      {
+        glossary: [{ kind: "glossary", source: "Hashira", pt: "Pilar" }],
+        rules: [{ kind: "prose", text: "Keep -san." }],
+        pairs: 5,
+      },
+      { glossary: [], rules: [{ kind: "prose", text: "Keep honorifics." }], pairs: 7 },
+    ])
+    expect(requests.map((r) => [r.tier, r.schema.name])).toEqual([["cheap", "merged_rules"]])
+    expect(combined).toEqual({
+      suggestions: [
+        {
+          rule: { kind: "prose", text: "Keep honorifics like -san." },
+          episodes: 2,
+          alternatives: [],
+        },
+        {
+          rule: { kind: "glossary", source: "Hashira", pt: "Pilar" },
+          episodes: 1,
+          alternatives: [],
+        },
+      ],
+      episodes: 2,
+      pairs: 12,
+    })
+  })
+
+  it("falls back to merging identical rules when the merge request fails", async () => {
+    const requests: CompletionRequest[] = []
+    const combined = await learner(null, requests).combine("gemini", [
+      {
+        glossary: [],
+        rules: [
+          { kind: "prose", text: "Use tu." },
+          { kind: "prose", text: "Keep -san." },
+        ],
+        pairs: 0,
+      },
+      { glossary: [], rules: [{ kind: "prose", text: "Use tu." }], pairs: 0 },
+    ])
+    expect(combined.suggestions.map((s) => s.episodes)).toEqual([2, 1])
+  })
+
+  it("needs no model call for a single episode", async () => {
+    const requests: CompletionRequest[] = []
+    await learner({}, requests).combine("gemini", [
+      {
+        glossary: [],
+        rules: [
+          { kind: "prose", text: "a" },
+          { kind: "prose", text: "b" },
+        ],
+        pairs: 0,
+      },
+    ])
+    expect(requests).toEqual([])
+  })
 })

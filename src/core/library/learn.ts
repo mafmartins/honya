@@ -183,3 +183,139 @@ function oneLine(text: string): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
+
+// One proposal after combining episodes: how many episodes support it, and for a
+// glossary entry the other forms some episodes used.
+export interface Suggestion {
+  rule: GlossaryRule | ProseRule
+  episodes: number
+  alternatives: string[]
+}
+
+export interface Combined {
+  suggestions: Suggestion[]
+  episodes: number
+  pairs: number
+}
+
+export const MERGE_SCHEMA: ReplySchema = {
+  name: "merged_rules",
+  schema: {
+    type: "object",
+    properties: {
+      rules: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { text: { type: "string" }, episodes: { type: "integer" } },
+          required: ["text", "episodes"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["rules"],
+    additionalProperties: false,
+  },
+}
+
+// Glossary entries merged by English term: the form most episodes used wins.
+export function combineGlossary(learned: readonly Learned[]): Suggestion[] {
+  const bySource = new Map<string, { source: string; forms: Map<string, number> }>()
+  for (const episode of learned) {
+    const seen = new Set<string>()
+    for (const entry of episode.glossary) {
+      const key = entry.source.toLowerCase()
+      const formKey = `${key}\u0000${entry.pt}`
+      if (seen.has(formKey)) {
+        continue
+      }
+      seen.add(formKey)
+      const group = bySource.get(key) ?? { source: entry.source, forms: new Map<string, number>() }
+      group.forms.set(entry.pt, (group.forms.get(entry.pt) ?? 0) + 1)
+      bySource.set(key, group)
+    }
+  }
+  return [...bySource.values()].map((group) => {
+    const forms = [...group.forms.entries()].sort((a, b) => b[1] - a[1])
+    const [pt, count] = forms[0] ?? ["", 0]
+    return {
+      rule: { kind: "glossary" as const, source: group.source, pt },
+      episodes: count,
+      alternatives: forms.slice(1).map(([form]) => form),
+    }
+  })
+}
+
+// Rules merged without a model: identical sentences (ignoring case and spacing) count
+// once per episode.
+export function combineRulesExactly(learned: readonly Learned[]): Suggestion[] {
+  const byText = new Map<string, { text: string; episodes: number }>()
+  for (const episode of learned) {
+    const seen = new Set<string>()
+    for (const rule of episode.rules) {
+      const key = rule.text.toLowerCase().replace(/\s+/g, " ").trim()
+      if (seen.has(key)) {
+        continue
+      }
+      seen.add(key)
+      const entry = byText.get(key) ?? { text: rule.text, episodes: 0 }
+      entry.episodes += 1
+      byText.set(key, entry)
+    }
+  }
+  return [...byText.values()].map((entry) => ({
+    rule: { kind: "prose" as const, text: entry.text },
+    episodes: entry.episodes,
+    alternatives: [],
+  }))
+}
+
+// Asks a model to merge rules that say the same thing in different words.
+export function mergeRequest(learned: readonly Learned[]): { system: string; prompt: string } {
+  const system = [
+    "Several episodes of one series were studied separately, and each produced rules describing the translator's habits.",
+    "Merge rules that say the same thing into one clear sentence, written as an instruction. Drop rules that contradict a rule more episodes support.",
+    "episodes: how many episodes support the merged rule (count each episode once). Reply with nothing but the JSON.",
+  ].join("\n")
+  const prompt = learned
+    .map(
+      (episode, index) =>
+        `Episode ${String(index + 1)}:\n${episode.rules.map((rule) => `- ${rule.text}`).join("\n") || "(no rules)"}`,
+    )
+    .join("\n\n")
+  return { system, prompt }
+}
+
+export function readMerged(value: unknown, episodes: number): Suggestion[] | string {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return "the reply has no rules list"
+  }
+  const suggestions: Suggestion[] = []
+  const seen = new Set<string>()
+  for (const item of value.rules as readonly unknown[]) {
+    if (!isRecord(item) || typeof item.text !== "string" || item.text.trim() === "") {
+      continue
+    }
+    const text = item.text.trim()
+    if (seen.has(text.toLowerCase())) {
+      continue
+    }
+    seen.add(text.toLowerCase())
+    const count = typeof item.episodes === "number" ? Math.round(item.episodes) : 1
+    suggestions.push({
+      rule: { kind: "prose", text },
+      episodes: Math.min(Math.max(count, 1), episodes),
+      alternatives: [],
+    })
+  }
+  return suggestions
+}
+
+// Strongest support first; glossary entries before rules when tied.
+export function rankSuggestions(suggestions: readonly Suggestion[]): Suggestion[] {
+  return [...suggestions].sort(
+    (a, b) =>
+      b.episodes - a.episodes ||
+      (a.rule.kind === b.rule.kind ? 0 : a.rule.kind === "glossary" ? -1 : 1),
+  )
+}

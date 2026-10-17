@@ -8,7 +8,7 @@ import type { PreparedScript } from "../main/translate/prepare"
 import type { TranslateEvent, TranslateRequest } from "../main/translate/runner"
 import type { SessionPhase } from "../main/translate/session"
 import type { Proposal } from "../core/review/review"
-import type { LearnScript, Learned } from "../core/library/learn"
+import type { Combined, LearnScript, Learned } from "../core/library/learn"
 
 export type { BaseProfile, ExampleScript, Rule, Variant } from "../core/library/types"
 export type { Preset, ProviderId } from "../core/pipeline/types"
@@ -16,7 +16,7 @@ export type { ListedStyle, PickedExample, PickedScript, PickedVideo } from "../m
 export type { LoadedBase, SeriesList, SeriesSummary } from "../main/ipc/profiles"
 export type { ModelPair } from "../main/modelStore"
 export type { Proposal } from "../core/review/review"
-export type { LearnScript, Learned } from "../core/library/learn"
+export type { Combined, LearnScript, Learned, Suggestion } from "../core/library/learn"
 export type { PreparedScript } from "../main/translate/prepare"
 export type { CheckResult, FinishResult, ReviewLine, ReviewView } from "../main/translate/review"
 export type { LiveLine, TranslateEvent, TranslateRequest } from "../main/translate/runner"
@@ -59,6 +59,8 @@ export interface SetupApi {
     portuguese: LearnScript,
     english: LearnScript | null,
   ): Promise<Learned>
+  // Combines several episodes' results, counting how many episodes support each one.
+  combineLearned(provider: ProviderId, learned: Learned[]): Promise<Combined>
 }
 
 export interface UnfinishedSession {

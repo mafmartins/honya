@@ -3,6 +3,7 @@ import { readProposal } from "../core/review/proposal"
 import type {
   CheckResult,
   FinishResult,
+  Combined,
   Learned,
   LiveLine,
   LoadedBase,
@@ -451,4 +452,52 @@ export function readLearned(value: unknown): Learned | null {
     rules.push({ kind: "prose", text: item.text })
   }
   return { glossary, rules, pairs: value.pairs }
+}
+
+export function readCombined(value: unknown): Combined | null {
+  if (
+    !isRecord(value) ||
+    !isCount(value.episodes) ||
+    !isCount(value.pairs) ||
+    !Array.isArray(value.suggestions)
+  ) {
+    return null
+  }
+  const suggestions: Combined["suggestions"] = []
+  for (const item of value.suggestions as readonly unknown[]) {
+    if (!isRecord(item) || !isCount(item.episodes) || !Array.isArray(item.alternatives)) {
+      return null
+    }
+    const alternatives: string[] = []
+    for (const alt of item.alternatives as readonly unknown[]) {
+      if (typeof alt !== "string") {
+        return null
+      }
+      alternatives.push(alt)
+    }
+    const rule: unknown = item.rule
+    if (!isRecord(rule)) {
+      return null
+    }
+    if (
+      rule.kind === "glossary" &&
+      typeof rule.source === "string" &&
+      typeof rule.pt === "string"
+    ) {
+      suggestions.push({
+        rule: { kind: "glossary", source: rule.source, pt: rule.pt },
+        episodes: item.episodes,
+        alternatives,
+      })
+    } else if (rule.kind === "prose" && typeof rule.text === "string") {
+      suggestions.push({
+        rule: { kind: "prose", text: rule.text },
+        episodes: item.episodes,
+        alternatives,
+      })
+    } else {
+      return null
+    }
+  }
+  return { suggestions, episodes: value.episodes, pairs: value.pairs }
 }

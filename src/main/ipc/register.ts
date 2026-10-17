@@ -6,7 +6,7 @@ import type { SecretStore } from "../secrets"
 import { pickExample, pickScript, pickVideo, type OpenFile } from "./files"
 import type { ProfileHandlers } from "./profiles"
 import type { Learner } from "../learn"
-import type { LearnScript } from "../../core/library/learn"
+import type { LearnScript, Learned } from "../../core/library/learn"
 
 export interface SetupDeps {
   open: OpenFile
@@ -82,6 +82,36 @@ export function registerSetupIpc(deps: SetupDeps): void {
     }
     return learner.learn(variant(args, 0), text(args, 1), provider(args, 2), portuguese, english)
   })
+  handle("honya:combine-learned", (args) => {
+    const learned = learnedList(args[1])
+    if (learned === null) {
+      throw new Error("Invalid suggestions.")
+    }
+    return learner.combine(provider(args, 0), learned)
+  })
+}
+
+function learnedList(value: unknown): Learned[] | null {
+  if (!Array.isArray(value)) {
+    return null
+  }
+  const list: Learned[] = []
+  for (const item of value as readonly unknown[]) {
+    if (
+      !isRecord(item) ||
+      typeof item.pairs !== "number" ||
+      !isRuleList(item.glossary) ||
+      !isRuleList(item.rules)
+    ) {
+      return null
+    }
+    list.push({
+      glossary: item.glossary.flatMap((rule) => (rule.kind === "glossary" ? [rule] : [])),
+      rules: item.rules.flatMap((rule) => (rule.kind === "prose" ? [rule] : [])),
+      pairs: item.pairs,
+    })
+  }
+  return list
 }
 
 // undefined when the value isn't a script; null is kept for "no English".

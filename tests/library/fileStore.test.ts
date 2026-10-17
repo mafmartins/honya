@@ -1,3 +1,4 @@
+import type { BaseProfile } from "../../src/core/library/types"
 import {
   existsSync,
   mkdirSync,
@@ -9,8 +10,17 @@ import {
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { emptyBase, importExample } from "../../src/core/library/card"
+import { emptyBase } from "../../src/core/library/card"
 import { createFileStore } from "../../src/core/library/fileStore"
+
+// A base with one more reference translation, as the project service stores them.
+function withExample(base: BaseProfile, name: string, text: string): BaseProfile {
+  return {
+    ...base,
+    examples: [...base.examples, { name, text }],
+    cardRevision: base.cardRevision + 1,
+  }
+}
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), "honya-profiles-"))
@@ -22,7 +32,7 @@ describe("file profile store", () => {
   it("saves and reloads a base and series across store instances", () => {
     const dir = tempDir()
     const first = createFileStore(dir)
-    first.saveBase(importExample(emptyBase("pt-pt"), "ep01.ass", "Olá."))
+    first.saveBase(withExample(emptyBase("pt-pt"), "ep01.ass", "Olá."))
     first.saveSeries(FRIEREN)
     const second = createFileStore(dir)
     expect(second.loadBase("pt-pt")?.examples).toEqual([{ name: "ep01.ass", text: "Olá." }])

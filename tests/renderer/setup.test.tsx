@@ -92,6 +92,20 @@ describe("setup dialog", () => {
     expect(settings.defaults).toEqual({ variant: "pt-br", preset: "best", frameSetting: "every" })
   })
 
+  it("tests the key without the spaces around it", async () => {
+    const api = fakeApi()
+    const testKey = vi.spyOn(api, "testKey")
+    const setKey = vi.spyOn(api, "setKey")
+    open(api)
+    typeKey("  sk-good \n")
+    fireEvent.click(screen.getByRole("button", { name: "Test the key" }))
+    await screen.findByText("✓ Claude answered")
+    expect(testKey).toHaveBeenCalledWith("claude", "sk-good")
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }))
+    await screen.findByLabelText("Portuguese")
+    expect(setKey).toHaveBeenCalledWith("claude", "sk-good")
+  })
+
   it("goes back to the provider step", async () => {
     open()
     typeKey("sk-good")

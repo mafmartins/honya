@@ -66,7 +66,7 @@ const SCRIPT: readonly [number, string, string, string | null, "ai" | "manual" |
 
 // Which lines the AI flagged, and why.
 const FLAGS: ReadonlyMap<number, string> = new Map([
-  [7, "Too long for the cue: 51 characters, 44 max. Try “Um Caçador decide num instante.”"],
+  [7, "Too long for the cue: 51 characters, 49 max. Try “Um Caçador decide num instante.”"],
   [13, "“mask” here is the fox mask from episode 1 — check the glossary."],
   [16, "Tone: Urokodaki is curt with Tanjiro; “Ainda não” may read too soft."],
 ])
@@ -267,7 +267,6 @@ function type(field: HTMLInputElement, value: string): void {
 interface FrameSpec {
   key: string
   title: string
-  api: HonyaApi
   node: ReactNode
   // Clicks and typing after the first render, to reach the state shown.
   steps?: (root: HTMLElement) => Promise<void>
@@ -380,7 +379,6 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "setup-1",
       title: "Setup · step 1, key tested",
-      api: fresh.api,
       node: <Shell api={fresh.api} />,
       steps: async (root) => {
         const key = await find(root, ".dialog input[type=password]")
@@ -393,7 +391,6 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "setup-2",
       title: "Setup · step 2, defaults",
-      api: fresh2.api,
       node: <Shell api={fresh2.api} />,
       steps: async (root) => {
         const key = await find(root, ".dialog input[type=password]")
@@ -408,13 +405,11 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "launch",
       title: "Launch window",
-      api: launch.api,
       node: <Shell api={launch.api} />,
     },
     {
       key: "session-empty",
       title: "Session · no script yet",
-      api: main.api,
       node: (
         <Window
           api={main.api}
@@ -429,7 +424,6 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "session-styles",
       title: "Session · which styles are dialogue",
-      api: styles,
       node: (
         <Window
           api={styles}
@@ -444,7 +438,6 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "session",
       title: "Session · a flagged line selected",
-      api: main.api,
       node: sessionWindow(main, <SessionPage sessionId={main.sessionId} />),
       steps: async (root) => {
         const flag = await find(root, ".line-row .line-flag")
@@ -454,7 +447,6 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "session-running",
       title: "Session · AI running",
-      api: running.api,
       node: sessionWindow(running, <SessionPage sessionId={running.sessionId} />),
       steps: async (root) => {
         await find(root, ".session-run")
@@ -463,7 +455,7 @@ async function frames(): Promise<FrameSpec[]> {
           sessionId: running.sessionId,
           index: 1,
           total: 2,
-          linesDone: 12,
+          linesDone: demoLines(12).filter((line) => line.words !== null).length,
           lineTotal: SCRIPT.length,
           activity: "Translating batch 1 of 2",
           indexes: Array.from({ length: 10 }, (_, i) => i + 12),
@@ -473,7 +465,6 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "export",
       title: "Export dialog",
-      api: main.api,
       node: sessionWindow(main, <SessionPage sessionId={main.sessionId} />),
       steps: async (root) => {
         ;(await findButton(root, "Export…")).click()
@@ -482,7 +473,6 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "project",
       title: "Project page",
-      api: main.api,
       node: page(
         { page: "project", id: main.projectId },
         <ProfilePage owner={{ kind: "project", id: main.projectId }} {...ACTIONS} />,
@@ -491,7 +481,6 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "style",
       title: "Language style page",
-      api: main.api,
       node: page(
         { page: "style", variant: "pt-pt" },
         <ProfilePage owner={{ kind: "style", variant: "pt-pt" }} {...ACTIONS} />,
@@ -500,19 +489,16 @@ async function frames(): Promise<FrameSpec[]> {
     {
       key: "settings",
       title: "Settings",
-      api: main.api,
       node: page({ page: "settings" }, <SettingsPage />),
     },
     {
       key: "stats",
       title: "Session stats",
-      api: main.api,
       node: page({ page: "stats" }, <StatsPage sessionId={main.sessionId} />),
     },
     {
       key: "projects",
       title: "Projects",
-      api: main.api,
       node: page({ page: "projects" }, <ProjectsPage onOpen={noop} />),
     },
   ]

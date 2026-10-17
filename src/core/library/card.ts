@@ -21,16 +21,6 @@ export function emptyBase(variant: Variant): BaseProfile {
   }
 }
 
-export function importExample(base: BaseProfile, name: string, text: string): BaseProfile {
-  return {
-    variant: base.variant,
-    cpsLimit: base.cpsLimit,
-    examples: [...base.examples, { name, text }],
-    rules: base.rules,
-    cardRevision: base.cardRevision + 1,
-  }
-}
-
 export function saveRule(
   base: BaseProfile,
   series: SeriesProfile,

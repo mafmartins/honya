@@ -48,7 +48,7 @@ export function SetupDialog({
     const run = runs.current
     setTest({ state: "testing" })
     setFailure(null)
-    api.testKey(provider, key).then(
+    api.testKey(provider, key.trim()).then(
       (result) => {
         if (run !== runs.current) {
           return
@@ -151,7 +151,7 @@ export function SetupDialog({
               disabled={test.state !== "ok" || busy}
               onClick={() => {
                 attempt(async () => {
-                  await api.setKey(provider, key)
+                  await api.setKey(provider, key.trim())
                   await api.updateSettings({ defaultProvider: provider })
                   setStep(2)
                 })

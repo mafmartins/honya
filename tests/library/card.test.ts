@@ -1,18 +1,27 @@
+import type { BaseProfile } from "../../src/core/library/types"
 import { describe, expect, it } from "vitest"
 import {
   addCorrections,
   compileCard,
   emptyBase,
-  importExample,
   projectFrames,
   projectPreset,
   saveRule,
 } from "../../src/core/library/card"
 import { createMemoryStore } from "../../src/core/library/store"
 
+// A base with one more reference translation, as the project service stores them.
+function withExample(base: BaseProfile, name: string, text: string): BaseProfile {
+  return {
+    ...base,
+    examples: [...base.examples, { name, text }],
+    cardRevision: base.cardRevision + 1,
+  }
+}
+
 describe("style card", () => {
   it("keeps variants apart and recompiles after a series rule", () => {
-    const pt = importExample(emptyBase("pt-pt"), "ep01.ass", "Olá.")
+    const pt = withExample(emptyBase("pt-pt"), "ep01.ass", "Olá.")
     const br = emptyBase("pt-br")
     const series = { id: "frieren", variant: "pt-pt" as const, name: "Frieren", rules: [] }
     const saved = saveRule(
@@ -30,8 +39,8 @@ describe("style card", () => {
   })
 
   it("keeps each example's name and joins their text into the voice", () => {
-    const base = importExample(
-      importExample(emptyBase("pt-pt"), "ep01.ass", "Olá."),
+    const base = withExample(
+      withExample(emptyBase("pt-pt"), "ep01.ass", "Olá."),
       "ep02.ass",
       "Adeus.",
     )
@@ -132,7 +141,7 @@ describe("corrections", () => {
 
 describe("style card voice with project references", () => {
   it("joins the style's reference text, then the project's", () => {
-    const base = importExample(emptyBase("pt-pt"), "ep01.ass", "Olá.")
+    const base = withExample(emptyBase("pt-pt"), "ep01.ass", "Olá.")
     const series = {
       id: "a",
       variant: "pt-pt" as const,

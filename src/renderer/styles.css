@@ -1245,6 +1245,11 @@ button.load-script {
   text-align: right;
 }
 
+/* Actions start at the cell's left edge, so the first button lines up down the column. */
+.data-table .row-actions {
+  justify-content: flex-start;
+}
+
 .data-table tbody tr:hover {
   background: var(--color-bg-hover);
 }
@@ -1430,8 +1435,6 @@ ul.key-list {
 details.advanced {
   display: grid;
   gap: var(--space-14);
-  border-top: var(--border-width) dashed var(--color-border-default);
-  padding-top: var(--space-20);
 }
 
 details.advanced summary {

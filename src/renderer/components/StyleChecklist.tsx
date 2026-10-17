@@ -6,7 +6,8 @@ type Choice = "dialogue" | "skip" | null
 export function StyleChecklist(props: {
   styles: ListedStyle[]
   onConfirm: (dialogueStyles: string[]) => void
-  onCancel: () => void
+  // Without it there is no Cancel button.
+  onCancel?: () => void
   confirmLabel?: string
 }): React.JSX.Element {
   const [choices, setChoices] = useState<Map<string, Choice>>(
@@ -54,9 +55,11 @@ export function StyleChecklist(props: {
       >
         {props.confirmLabel ?? "Import"}
       </button>
-      <button type="button" onClick={props.onCancel}>
-        Cancel
-      </button>
+      {props.onCancel === undefined ? null : (
+        <button type="button" onClick={props.onCancel}>
+          Cancel
+        </button>
+      )}
     </div>
   )
 }

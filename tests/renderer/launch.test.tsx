@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { LaunchDialog } from "../../src/renderer/workspace/LaunchDialog"
 import { Shell } from "../../src/renderer/workspace/Shell"
-import { fakeApi, type FakeApi } from "./fakeApi"
+import { fakeApi, FAKE_SCRIPT_NAME, type FakeApi } from "./fakeApi"
 
 afterEach(() => {
   cleanup()
@@ -109,7 +109,7 @@ describe("shell boot", () => {
         project.id,
       )
     })
-    expect(await screen.findByRole("heading", { level: 1, name: "Session" })).toBeTruthy()
+    expect(await screen.findByRole("heading", { level: 1, name: FAKE_SCRIPT_NAME })).toBeTruthy()
   })
 
   it("opens a project on its latest unfinished session, or a new one", async () => {

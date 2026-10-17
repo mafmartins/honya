@@ -79,7 +79,7 @@ describe("workspace shell", () => {
     const nav = menu()
     expect(within(nav).queryByRole("heading", { name: "This session" })).toBeNull()
     fireEvent.click(await within(nav).findByRole("button", { name: /ep01\.ass/ }))
-    expect(await screen.findByRole("heading", { level: 1, name: "Session" })).toBeTruthy()
+    expect(await screen.findByRole("heading", { level: 1, name: FAKE_SCRIPT_NAME })).toBeTruthy()
     const box = await within(nav).findByRole("region", { name: "This session" })
     expect(
       await within(box).findByText(`0 of ${String(FAKE_SCRIPT.length)} lines translated`),

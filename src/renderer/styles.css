@@ -625,6 +625,10 @@ button.dialog-close {
   justify-content: flex-end;
 }
 
+.dialog-body {
+  margin: 0;
+}
+
 .test-ok {
   color: var(--color-text-primary);
 }
@@ -712,8 +716,10 @@ button.launch-row {
 }
 
 /* Session page: top bar, filters, the line list and the line panel slot */
+/* A flex column, so the run note can come and go above the filters. */
 .page.session-page {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
 }
 
 .session-page button,
@@ -787,7 +793,8 @@ button.icon-button {
 
 .session-run {
   flex-basis: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-14);
   padding-top: var(--space-14);
@@ -803,8 +810,23 @@ button.icon-button {
   font-weight: 600;
 }
 
-.session-run button {
-  margin-left: auto;
+.session-run > :last-child {
+  grid-column: 3;
+}
+
+.session-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-14);
+  padding: var(--space-10) var(--space-20);
+  border-bottom: 1px dashed var(--color-border-default);
+  border-left: var(--border-accent-width) solid var(--color-border-accent);
+  font-size: 15px;
+}
+
+.session-note p {
+  flex: 1;
+  margin: 0;
 }
 
 .session-filters {
@@ -846,6 +868,7 @@ button.icon-button {
 }
 
 .session-body {
+  flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
   min-height: 0;
@@ -878,6 +901,16 @@ button.icon-button {
 
 .line-row:not(.line-head):hover {
   background: var(--color-bg-hover);
+}
+
+.line-row.line-working {
+  border-left-color: color-mix(in srgb, var(--color-border-accent) 45%, transparent);
+}
+
+.line-row.line-working .line-missing {
+  color: var(--color-text-accent);
+  font-style: italic;
+  opacity: 0.8;
 }
 
 .line-row[aria-selected="true"] {

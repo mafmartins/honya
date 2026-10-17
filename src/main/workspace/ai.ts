@@ -29,6 +29,8 @@ export type WorkspaceEvent =
       linesDone: number
       lineTotal: number
       activity: string
+      // The lines of the batch being translated; empty between batches.
+      indexes: number[]
     }
   | { type: "lines"; sessionId: string; lines: LineView[] }
   | {
@@ -187,6 +189,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
       linesDone: translatedCount(start),
       lineTotal: start.lines.length,
       activity: "",
+      indexes: [] as number[],
     }
     const report = (activity?: string): void => {
       if (activity !== undefined) {
@@ -227,6 +230,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
         case "batch":
           progress.index = event.index
           progress.total = event.total
+          progress.indexes = event.indexes
           report(`Translating batch ${String(event.index)} of ${String(event.total)}`)
           break
         case "escalate":
@@ -313,6 +317,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
             }))
             progress.index = event.index
             progress.total = event.total
+            progress.indexes = []
             emit({
               type: "lines",
               sessionId: id,

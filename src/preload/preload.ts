@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron"
 import { readBaseProfile } from "../core/library/guards"
 import {
+  BEFORE_CLOSE_CHANNEL,
+  CLOSE_ANSWER_CHANNEL,
   WORKSPACE_EVENT_CHANNEL,
   workspaceChannel,
   type HonyaApi,
@@ -107,6 +109,18 @@ const workspace: WorkspaceApi = {
 
 const honya: HonyaApi = {
   ...workspace,
+  onBeforeClose(listener) {
+    const handler = (): void => {
+      listener()
+    }
+    ipcRenderer.on(BEFORE_CLOSE_CHANNEL, handler)
+    return () => {
+      ipcRenderer.removeListener(BEFORE_CLOSE_CHANNEL, handler)
+    }
+  },
+  confirmClose(allow) {
+    ipcRenderer.send(CLOSE_ANSWER_CHANNEL, allow)
+  },
   pickScript: () => picked("honya:pick-script", [], readPickedScript),
   pickVideo: () => picked("honya:pick-video", [], readPickedVideo),
   pickExample: () => picked("honya:pick-example", [], readPickedExample),

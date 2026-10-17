@@ -12,8 +12,8 @@ export interface MenuProps {
   projectId: string | null
   sessionId: string | null
   onNavigate: (route: Route) => void
-  // Sets the project without opening a session (used by recent sessions).
-  onSwitchProject: (id: string) => void
+  // A recent session, with its project.
+  onOpenSession: (projectId: string, sessionId: string) => void
   onOpenProject: (id: string) => void
 }
 
@@ -24,7 +24,7 @@ export function Menu({
   projectId,
   sessionId,
   onNavigate,
-  onSwitchProject,
+  onOpenSession,
   onOpenProject,
 }: MenuProps): React.JSX.Element {
   const api = useApi()
@@ -140,8 +140,7 @@ export function Menu({
                     route.page === "session" && item.id === sessionId ? "true" : undefined
                   }
                   onClick={() => {
-                    onSwitchProject(item.projectId)
-                    onNavigate({ page: "session", sessionId: item.id })
+                    onOpenSession(item.projectId, item.id)
                   }}
                 >
                   <span>{item.scriptName === "" ? "No script yet" : item.scriptName}</span>

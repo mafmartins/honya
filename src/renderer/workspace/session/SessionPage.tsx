@@ -8,7 +8,13 @@ import { Filters, filterLines, type LineFilter } from "./Filters"
 import { LineList } from "./LineList"
 import { LinePanel } from "./LinePanel"
 import { TopBar } from "./TopBar"
-import { SaveStatusContext, useAiRun, useSaveStatus, useSession } from "./useSession"
+import {
+  SaveStatusContext,
+  useAiRun,
+  useSaveStatus,
+  useSession,
+  type RunEnding,
+} from "./useSession"
 
 const NOT_WORKING: ReadonlySet<number> = new Set()
 
@@ -34,7 +40,7 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
   const api = useApi()
   const act = useAction()
   const { view, setView, setLine, reload } = useSession(api, id)
-  const { run, start } = useAiRun(api, id, reload)
+  const { run, ending, start, dismiss } = useAiRun(api, id, reload)
   const { saving, status } = useSaveStatus()
   const [stopping, setStopping] = useState(false)
   const [filter, setFilter] = useState<LineFilter>("all")
@@ -80,6 +86,10 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
   const lines = filterLines(view.lines, filter, search)
   const selected = chosen ?? view.lines[0]?.index ?? null
   const selectedLine = view.lines.find((line) => line.index === selected)
+  const runAi = (): void => {
+    setStopping(false)
+    start()
+  }
   const options = (patch: { provider?: ProviderId; preset?: Preset }): void => {
     act(async () => {
       replace(await api.setSessionOptions(id, patch))
@@ -111,15 +121,13 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
               replace(await api.detachVideo(id))
             })
           }}
-          onRun={() => {
-            setStopping(false)
-            start()
-          }}
+          onRun={runAi}
           onStop={() => {
             setStopping(true)
             act(() => api.stopAi())
           }}
         />
+        {ending === null ? null : <RunNote ending={ending} onRetry={runAi} onDismiss={dismiss} />}
         <Filters
           lines={view.lines}
           filter={filter}
@@ -131,7 +139,7 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
           <LineList
             lines={lines}
             selected={selected}
-            working={NOT_WORKING}
+            working={run === null || run === "starting" ? NOT_WORKING : run.working}
             onSelect={setChosen}
             onEdit={() => {
               panelRef.current?.querySelector("textarea")?.focus()
@@ -156,6 +164,37 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
         </div>
       </section>
     </SaveStatusContext.Provider>
+  )
+}
+
+// Why the last run ended early, with a way to go on.
+function RunNote({
+  ending,
+  onRetry,
+  onDismiss,
+}: {
+  ending: RunEnding
+  onRetry: () => void
+  onDismiss: () => void
+}): React.JSX.Element {
+  const text =
+    ending.outcome === "stopped"
+      ? "Stopped. Finished batches are saved."
+      : ending.message === null
+        ? "The AI run stopped. Finished lines are saved."
+        : `The AI run stopped: ${ending.message.replace(/\.+$/, "")}. Finished lines are saved.`
+  return (
+    <div className="session-note" role="status">
+      <p>{text}</p>
+      {ending.outcome === "failed" ? (
+        <button type="button" onClick={onRetry}>
+          Try again
+        </button>
+      ) : null}
+      <button type="button" className="icon-button" aria-label="Dismiss" onClick={onDismiss}>
+        ✕
+      </button>
+    </div>
   )
 }
 

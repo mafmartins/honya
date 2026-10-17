@@ -44,25 +44,33 @@ export interface RunProgress {
   linesDone: number
   lineTotal: number
   activity: string
+  // The lines of the batch being translated.
+  working: ReadonlySet<number>
 }
 
 // null: no run; "starting": running, before the first progress event.
 export type RunState = RunProgress | "starting" | null
 
+// How the last run ended, when it didn't finish: shown under the top bar.
+export type RunEnding = { outcome: "stopped" } | { outcome: "failed"; message: string | null }
+
 // Whether the AI is translating this session, from aiActive and the run events. A run
-// that ends reloads the session.
+// that ends reloads the session; a failed one also reports its message.
 export function useAiRun(
   api: HonyaApi,
   id: string,
   onEnded: () => void,
-): { run: RunState; start: () => void } {
+): { run: RunState; ending: RunEnding | null; start: () => void; dismiss: () => void } {
   const report = useReport()
   const [run, setRun] = useState<RunState>(null)
+  const [ending, setEnding] = useState<RunEnding | null>(null)
   useEffect(() => {
     let live = true
+    // A run that ended while aiActive was in flight must not come back as "starting".
+    let endedMeanwhile = false
     api.aiActive().then(
       (active) => {
-        if (live && active === id) {
+        if (live && !endedMeanwhile && active === id) {
           setRun((current) => current ?? "starting")
         }
       },
@@ -79,9 +87,17 @@ export function useAiRun(
           linesDone: event.linesDone,
           lineTotal: event.lineTotal,
           activity: event.activity,
+          working: new Set(event.indexes),
         })
       } else if (event.type === "run-ended") {
+        endedMeanwhile = true
         setRun(null)
+        if (event.outcome === "failed") {
+          setEnding({ outcome: "failed", message: event.message })
+          report(event.message ?? "The AI run stopped.")
+        } else {
+          setEnding(event.outcome === "stopped" ? { outcome: "stopped" } : null)
+        }
         onEnded()
       }
     })
@@ -89,9 +105,10 @@ export function useAiRun(
       live = false
       unsubscribe()
     }
-  }, [api, id, onEnded])
+  }, [api, id, onEnded, report])
   const start = useCallback((): void => {
     setRun("starting")
+    setEnding(null)
     api.runAi(id).then(
       () => {
         report(null)
@@ -102,7 +119,10 @@ export function useAiRun(
       },
     )
   }, [api, id, report])
-  return { run, start }
+  const dismiss = useCallback((): void => {
+    setEnding(null)
+  }, [])
+  return { run, ending, start, dismiss }
 }
 
 export interface SaveStatus {

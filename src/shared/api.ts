@@ -185,7 +185,13 @@ export interface WorkspaceApi {
   onWorkspaceEvent(listener: (event: WorkspaceEvent) => void): () => void
 }
 
-export type HonyaApi = SetupApi & TranslateApi & WorkspaceApi
+// Closing the window during an AI run: main asks, the page answers once the user chose.
+export interface WindowApi {
+  onBeforeClose(listener: () => void): () => void
+  confirmClose(allow: boolean): void
+}
+
+export type HonyaApi = SetupApi & TranslateApi & WorkspaceApi & WindowApi
 
 // The IPC channel of a workspace method: honya:ws-<kebab-case name>.
 export function workspaceChannel(name: keyof WorkspaceApi): string {
@@ -193,3 +199,5 @@ export function workspaceChannel(name: keyof WorkspaceApi): string {
 }
 
 export const WORKSPACE_EVENT_CHANNEL = "honya:ws-event"
+export const BEFORE_CLOSE_CHANNEL = "honya:ws-before-close"
+export const CLOSE_ANSWER_CHANNEL = "honya:ws-close-answer"

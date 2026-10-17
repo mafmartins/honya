@@ -918,12 +918,14 @@ export function readWorkspaceEvent(value: unknown): WorkspaceEvent | null {
   }
   const sessionId = value.sessionId
   switch (value.type) {
-    case "run-progress":
+    case "run-progress": {
+      const indexes = readList(value.indexes, (item) => (isCount(item) ? item : null))
       return isCount(value.index) &&
         isCount(value.total) &&
         isCount(value.linesDone) &&
         isCount(value.lineTotal) &&
-        typeof value.activity === "string"
+        typeof value.activity === "string" &&
+        indexes !== null
         ? {
             type: "run-progress",
             sessionId,
@@ -932,8 +934,10 @@ export function readWorkspaceEvent(value: unknown): WorkspaceEvent | null {
             linesDone: value.linesDone,
             lineTotal: value.lineTotal,
             activity: value.activity,
+            indexes,
           }
         : null
+    }
     case "lines": {
       const lines = readList(value.lines, readLineView)
       return lines === null ? null : { type: "lines", sessionId, lines }

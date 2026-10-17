@@ -26,7 +26,8 @@ export type { LineResult }
 
 export type RunEvent =
   | { type: "brief" }
-  | { type: "batch"; index: number; total: number }
+  // indexes: the cue indexes the batch translates.
+  | { type: "batch"; index: number; total: number; indexes: number[] }
   | { type: "escalate"; count: number }
   // Lines sent back to the cheap model to fix a variant form or a glossary rule.
   | { type: "fix"; count: number }
@@ -210,7 +211,12 @@ export async function translateMissing(input: MissingInput): Promise<"done" | "s
     if (first === undefined || last === undefined) {
       continue
     }
-    input.onEvent?.({ type: "batch", index: index + 1, total: chunks.length })
+    input.onEvent?.({
+      type: "batch",
+      index: index + 1,
+      total: chunks.length,
+      indexes: chunk.map((cue) => cue.index),
+    })
     const context: BatchContext = {
       engine: input,
       system,
@@ -391,7 +397,12 @@ async function continueTranslation(
     if (chunk === undefined) {
       break
     }
-    input.onEvent?.({ type: "batch", index: index + 1, total: chunks.length })
+    input.onEvent?.({
+      type: "batch",
+      index: index + 1,
+      total: chunks.length,
+      indexes: chunk.map((cue) => cue.index),
+    })
     const context: BatchContext = {
       engine: input,
       system,

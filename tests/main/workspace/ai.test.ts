@@ -172,6 +172,11 @@ describe("AI service", () => {
     expect(progress.map((event) => event.activity)).toContain("Reading the episode")
     expect(progress.map((event) => event.activity)).toContain("Translating batch 2 of 2")
     expect(progress.at(-1)).toMatchObject({ index: 2, total: 2, linesDone: 30, lineTotal: 30 })
+    // While a batch is out its lines are named; once it lands none are.
+    const working = progress.map((event) => event.indexes)
+    expect(working).toContainEqual([1, 2, 3, 4, ...Array.from({ length: 21 }, (_, i) => i + 6)])
+    expect(working).toContainEqual([27, 28, 29])
+    expect(progress.at(-1)).toMatchObject({ indexes: [] })
     expect(ai.activeId()).toBeNull()
   })
 

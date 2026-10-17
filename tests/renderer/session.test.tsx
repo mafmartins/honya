@@ -202,6 +202,7 @@ describe("session page", () => {
         linesDone: 40,
         lineTotal: 120,
         activity: "Translating batch 2 of 5",
+        indexes: [],
       })
     })
     expect(screen.getByText("Batch 2 of 5 · 40 of 120 lines")).toBeTruthy()
@@ -233,6 +234,7 @@ describe("session page", () => {
         linesDone: 0,
         lineTotal: 1,
         activity: "Translating",
+        indexes: [],
       })
     })
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull()

@@ -24,6 +24,7 @@ export function LineList({
 }: {
   lines: readonly LineView[]
   selected: number | null
+  // Lines the AI is translating right now; shown busy until their Portuguese arrives.
   working: ReadonlySet<number>
   onSelect: (index: number) => void
   // Enter on the selected line: the panel takes the focus for editing.
@@ -124,7 +125,7 @@ export function LineList({
           line={line}
           rowIndex={first + offset + 2}
           selected={line.index === selected}
-          working={working.has(line.index)}
+          working={working.has(line.index) && line.words === null}
           onSelect={onSelect}
         />
       ))}
@@ -149,7 +150,7 @@ function LineRow({
   return (
     <div
       id={rowId(line.index)}
-      className="line-row"
+      className={working ? "line-row line-working" : "line-row"}
       role="row"
       aria-rowindex={rowIndex}
       aria-selected={selected}

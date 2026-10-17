@@ -3,6 +3,7 @@ import {
   translateMissing,
   type CompletionRequest,
   type MissingInput,
+  type RunEvent,
 } from "../../src/core/pipeline/run"
 import type { Completer } from "../../src/core/pipeline/run"
 import type { AiLine } from "../../src/core/session/lines"
@@ -94,6 +95,18 @@ describe("translateMissing", () => {
     })
     // The nearest earlier lines with Portuguese give the batch its context.
     expect(linePrompts(requests)[0]).toContain("Line 9. => feito 9")
+  })
+
+  it("names the lines of each batch as it starts", async () => {
+    const events: RunEvent[] = []
+    await translateMissing(
+      missingInput(30, echo, {
+        known: knownUpTo(3),
+        onEvent: (event) => events.push(event),
+      }),
+    )
+    const starts = events.flatMap((event) => (event.type === "batch" ? [event.indexes] : []))
+    expect(starts).toEqual([Array.from({ length: 25 }, (_, i) => i + 3), [28, 29]])
   })
 
   it("shows the translator's lines inside the batch range as context", async () => {

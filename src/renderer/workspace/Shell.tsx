@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { AppSettings, HonyaApi, LaunchInfo, Variant } from "../../shared/api"
 import { ErrorContext } from "../action"
 import { ApiContext, errorMessage } from "../api"
 import { ErrorLine } from "../ErrorLine"
+import { ConfirmDialog } from "./ConfirmDialog"
 import { LaunchDialog } from "./LaunchDialog"
 import { Menu } from "./Menu"
 import { ProfilePage } from "./pages/ProfilePage"
@@ -18,6 +19,9 @@ type Dialog =
   | { kind: "setup"; settings: AppSettings }
   | { kind: "launch"; info: LaunchInfo; variant: Variant }
 
+// How long closing the window waits for a stopped run to end.
+const CLOSE_WAIT_MS = 5000
+
 // The workspace: the left menu and the page for the current route. The open session
 // stays open while other pages are shown.
 export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
@@ -26,46 +30,129 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>({ kind: "none" })
-  const navigate = useCallback((next: Route): void => {
+  // Leaving the open session while the AI translates it waits for "Stop the AI run?".
+  const [leaving, setLeaving] = useState<{ proceed: () => void } | null>(null)
+  const [closing, setClosing] = useState(false)
+  const leave = useCallback(
+    (proceed: () => void): void => {
+      if (sessionId === null) {
+        proceed()
+        return
+      }
+      api.aiActive().then(
+        (active) => {
+          if (active === sessionId) {
+            setLeaving({ proceed })
+          } else {
+            proceed()
+          }
+        },
+        () => {
+          proceed()
+        },
+      )
+    },
+    [api, sessionId],
+  )
+  const show = useCallback((next: Route): void => {
     if (next.page === "session") {
       setSessionId(next.sessionId)
     }
     setError(null)
     setRoute(next)
   }, [])
-  const openSession = useCallback(
+  const showSession = useCallback(
     (project: string, session: string): void => {
       setProjectId(project)
-      navigate({ page: "session", sessionId: session })
+      show({ page: "session", sessionId: session })
     },
-    [navigate],
+    [show],
   )
   // A project opens on its latest unfinished session, or a new empty one.
-  const openProject = useCallback(
+  const showProject = useCallback(
     async (project: string): Promise<void> => {
       const sessions = await api.projectSessions(project)
       const unfinished = sessions.find((item) => !item.finished)
-      openSession(project, unfinished?.id ?? (await api.newSession(project)))
+      showSession(project, unfinished?.id ?? (await api.newSession(project)))
     },
-    [api, openSession],
+    [api, showSession],
+  )
+  // Other pages keep the session open, so its run goes on; another session doesn't.
+  const navigate = useCallback(
+    (next: Route): void => {
+      if (next.page === "session" && next.sessionId !== sessionId) {
+        leave(() => {
+          show(next)
+        })
+      } else {
+        show(next)
+      }
+    },
+    [leave, sessionId, show],
   )
   const boot = useCallback((): void => {
     Promise.all([api.launchInfo(), api.getSettings()]).then(
       ([info, settings]) => {
-        setDialog(
-          info.setupDone
-            ? { kind: "launch", info, variant: settings.defaults.variant }
-            : { kind: "setup", settings },
-        )
+        if (!info.setupDone) {
+          setDialog({ kind: "setup", settings })
+          return
+        }
+        leave(() => {
+          setDialog({ kind: "launch", info, variant: settings.defaults.variant })
+        })
       },
       (failure: unknown) => {
         setError(errorMessage(failure))
       },
     )
-  }, [api])
+  }, [api, leave])
+  // Only on mount: boot changes with the open session, which must not reopen the launch window.
+  const booted = useRef(false)
   useEffect(() => {
-    boot()
+    if (!booted.current) {
+      booted.current = true
+      boot()
+    }
   }, [boot])
+  useEffect(
+    () =>
+      api.onBeforeClose(() => {
+        setClosing(true)
+      }),
+    [api],
+  )
+  // Stops the run, then lets the window close once it ended or after CLOSE_WAIT_MS.
+  const stopAndClose = (): void => {
+    let done = false
+    const finish = (): void => {
+      if (done) {
+        return
+      }
+      done = true
+      unsubscribe()
+      clearTimeout(timer)
+      api.confirmClose(true)
+    }
+    const unsubscribe = api.onWorkspaceEvent((event) => {
+      if (event.type === "run-ended") {
+        finish()
+      }
+    })
+    const timer = setTimeout(finish, CLOSE_WAIT_MS)
+    api
+      .stopAi()
+      .then(() => api.aiActive())
+      .then(
+        (active) => {
+          if (active === null) {
+            finish()
+          }
+        },
+        (failure: unknown) => {
+          setError(errorMessage(failure))
+        },
+      )
+  }
   return (
     <ApiContext.Provider value={api}>
       <ErrorContext.Provider value={setError}>
@@ -75,10 +162,20 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
             projectId={projectId}
             sessionId={sessionId}
             onNavigate={navigate}
-            onSwitchProject={setProjectId}
+            onOpenSession={(project, session) => {
+              if (session === sessionId) {
+                showSession(project, session)
+              } else {
+                leave(() => {
+                  showSession(project, session)
+                })
+              }
+            }}
             onOpenProject={(id) => {
-              openProject(id).catch((failure: unknown) => {
-                setError(errorMessage(failure))
+              leave(() => {
+                showProject(id).catch((failure: unknown) => {
+                  setError(errorMessage(failure))
+                })
               })
             }}
           />
@@ -94,22 +191,22 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
               onContinue={() => {
                 const current = dialog.info.continueSession
                 if (current !== null) {
-                  openSession(current.projectId, current.id)
+                  showSession(current.projectId, current.id)
                 }
                 setDialog({ kind: "none" })
                 return Promise.resolve()
               }}
               onOpenProject={async (id) => {
-                await openProject(id)
+                await showProject(id)
                 setDialog({ kind: "none" })
               }}
               onNewSession={async (id) => {
-                openSession(id, await api.newSession(id))
+                showSession(id, await api.newSession(id))
                 setDialog({ kind: "none" })
               }}
               onCreateProject={async (name, variant) => {
                 const created = await api.createProject(name, variant)
-                openSession(created.id, await api.newSession(created.id))
+                showSession(created.id, await api.newSession(created.id))
                 setDialog({ kind: "none" })
               }}
               onClose={() => {
@@ -117,10 +214,45 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
               }}
             />
           ) : null}
+          {leaving === null ? null : (
+            <ConfirmDialog
+              {...STOP_RUN}
+              onConfirm={() => {
+                setLeaving(null)
+                api.stopAi().catch((failure: unknown) => {
+                  setError(errorMessage(failure))
+                })
+                leaving.proceed()
+              }}
+              onCancel={() => {
+                setLeaving(null)
+              }}
+            />
+          )}
+          {closing ? (
+            <ConfirmDialog
+              {...STOP_RUN}
+              onConfirm={() => {
+                setClosing(false)
+                stopAndClose()
+              }}
+              onCancel={() => {
+                setClosing(false)
+                api.confirmClose(false)
+              }}
+            />
+          ) : null}
         </div>
       </ErrorContext.Provider>
     </ApiContext.Provider>
   )
+}
+
+const STOP_RUN = {
+  title: "Stop the AI run?",
+  body: "Honya is translating this session. Stopping keeps the lines already done.",
+  confirmLabel: "Stop",
+  cancelLabel: "Keep translating",
 }
 
 function Page({ route, sessionId }: { route: Route; sessionId: string | null }): React.JSX.Element {

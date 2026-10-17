@@ -41,6 +41,10 @@ export type FakeApi = HonyaApi & {
   emitTranslate(event: TranslateEvent): void
   // Sends a workspace event to every onWorkspaceEvent listener.
   emitWorkspace(event: WorkspaceEvent): void
+  // Main's question when the window is closed during a run.
+  emitBeforeClose(): void
+  // Every confirmClose answer, in order.
+  closeAnswers: boolean[]
 }
 
 export function fakeApi(overrides: Partial<HonyaApi> = {}): FakeApi {
@@ -71,8 +75,19 @@ export function fakeApi(overrides: Partial<HonyaApi> = {}): FakeApi {
     return item
   }
   const workspace = fakeWorkspace(keys)
+  const closeListeners = new Set<() => void>()
+  const closeAnswers: boolean[] = []
   const api: HonyaApi = {
     ...workspace.api,
+    onBeforeClose: (listener) => {
+      closeListeners.add(listener)
+      return () => {
+        closeListeners.delete(listener)
+      }
+    },
+    confirmClose: (allow) => {
+      closeAnswers.push(allow)
+    },
     pickScript: () => Promise.resolve(null),
     pickVideo: () => Promise.resolve(null),
     pickExample: () => Promise.resolve(null),
@@ -202,7 +217,19 @@ export function fakeApi(overrides: Partial<HonyaApi> = {}): FakeApi {
       listener(event)
     }
   }
-  return { ...api, ...overrides, emitTranslate, emitWorkspace: workspace.emit }
+  const emitBeforeClose = (): void => {
+    for (const listener of [...closeListeners]) {
+      listener()
+    }
+  }
+  return {
+    ...api,
+    ...overrides,
+    emitTranslate,
+    emitWorkspace: workspace.emit,
+    emitBeforeClose,
+    closeAnswers,
+  }
 }
 
 // The script every fake session loads: four dialogue lines.
@@ -492,6 +519,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
       linesDone: done,
       lineTotal: item.lines.length,
       activity: "Translating batch 1 of 1",
+      indexes: [],
     })
     emit({ type: "lines", sessionId: id, lines: filled })
     emit({ type: "run-ended", sessionId: id, outcome: "done", message: null })

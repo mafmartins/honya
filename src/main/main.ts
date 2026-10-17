@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, safeStorage, shell } from "electron"
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -32,7 +32,8 @@ import { createAiService, type AiService, type WorkspaceEvent } from "./workspac
 import { createExportService } from "./workspace/export"
 import { createProjectService } from "./workspace/projects"
 import { createWorkSessions, type WorkSessions } from "./workspace/sessions"
-import { WORKSPACE_EVENT_CHANNEL } from "../shared/api"
+import { BEFORE_CLOSE_CHANNEL, CLOSE_ANSWER_CHANNEL, WORKSPACE_EVENT_CHANNEL } from "../shared/api"
+import { createCloseGuard, type CloseGuard } from "./closeGuard"
 import type { FileFilter } from "./ipc/files"
 
 // How long quitting waits for a running AI to stop after its current batch.
@@ -109,10 +110,18 @@ function boot(): void {
       app.quit()
     })
   })
-  openWindow()
+  // Closing a window mid-run asks the page first; quitting stops the run itself.
+  const running = (): boolean => !quitting && ai.activeId() !== null
+  ipcMain.on(CLOSE_ANSWER_CHANNEL, (event, allow: unknown) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (window !== null && typeof allow === "boolean") {
+      closeGuards.get(window)?.answer(allow)
+    }
+  })
+  openWindow(running)
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      openWindow()
+      openWindow(running)
     }
   })
 }
@@ -324,7 +333,9 @@ function writeModelFile(text: string): void {
   writeFileSync(file, text, "utf8")
 }
 
-function openWindow(): void {
+const closeGuards = new WeakMap<BrowserWindow, CloseGuard>()
+
+function openWindow(running: () => boolean): void {
   const rendererPath = join(app.getAppPath(), "dist", "renderer", "index.html")
   const window = new BrowserWindow({
     width: 1280,
@@ -351,6 +362,21 @@ function openWindow(): void {
     }
   })
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
+  const guard = createCloseGuard({
+    running,
+    ask: () => {
+      window.webContents.send(BEFORE_CLOSE_CHANNEL)
+    },
+    close: () => {
+      window.close()
+    },
+  })
+  closeGuards.set(window, guard)
+  window.on("close", (event) => {
+    if (!guard.onClose()) {
+      event.preventDefault()
+    }
+  })
   // Shown maximised once the first frame is ready, so it never flashes small.
   window.once("ready-to-show", () => {
     window.maximize()

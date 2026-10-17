@@ -157,6 +157,7 @@ describe("workspace readers", () => {
         linesDone: 40,
         lineTotal: 120,
         activity: "Translating batch 1 of 3",
+        indexes: [0, 1, 2],
       },
       { type: "lines", sessionId: "s", lines: [line] },
       { type: "run-ended", sessionId: "s", outcome: "done", message: null },
@@ -170,6 +171,18 @@ describe("workspace readers", () => {
       readWorkspaceEvent({ type: "run-ended", sessionId: "s", outcome: "won", message: null }),
     ).toBeNull()
     expect(readWorkspaceEvent({ type: "run-progress", sessionId: "s" })).toBeNull()
+    expect(
+      readWorkspaceEvent({
+        type: "run-progress",
+        sessionId: "s",
+        index: 1,
+        total: 3,
+        linesDone: 0,
+        lineTotal: 3,
+        activity: "",
+        indexes: ["0"],
+      }),
+    ).toBeNull()
     expect(readWorkspaceEvent({ type: "other", sessionId: "s" })).toBeNull()
     expect(readWorkspaceEvent({ type: "lines", lines: [] })).toBeNull()
   })

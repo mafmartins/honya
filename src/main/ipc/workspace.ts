@@ -1,4 +1,5 @@
 import { ipcMain } from "electron"
+import { resolve } from "node:path"
 import {
   isFrameSetting,
   isPreset,
@@ -67,6 +68,13 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
   const nothing = (work: () => unknown): null => {
     work()
     return null
+  }
+  // The page may only write where main proposed (an export's default path) or where
+  // the user chose in the save dialog, and only show the file it last exported.
+  const offered = new Set<string>()
+  let exported: string | null = null
+  const offer = (path: string): void => {
+    offered.add(resolve(path))
   }
   return {
     getSettings: () => settings.get(),
@@ -169,16 +177,36 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
     retranslate: (args) => ai.retranslate(sessionId(args, 0), lineIndex(args, 1), text(args, 2)),
     draftRule: (args) => ai.draftRule(sessionId(args, 0), lineIndex(args, 1)),
     lineFrame: (args) => ai.frame(sessionId(args, 0), lineIndex(args, 1)),
-    exportPreview: (args) => exporter.preview(sessionId(args, 0)),
-    pickExportPath: (args) => deps.saveFile(text(args, 0), ASS_FILTER),
+    exportPreview: async (args) => {
+      const preview = await exporter.preview(sessionId(args, 0))
+      offer(preview.defaultPath)
+      return preview
+    },
+    pickExportPath: async (args) => {
+      const path = await deps.saveFile(text(args, 0), ASS_FILTER)
+      if (path !== null) {
+        offer(path)
+      }
+      return path
+    },
     exportWrite: (args) => {
-      const { path } = exporter.write(sessionId(args, 0), text(args, 1), ownedRules(args[2]))
+      const id = sessionId(args, 0)
+      const target = text(args, 1)
+      if (!offered.has(resolve(target))) {
+        throw new Error("Choose where to save with Change…")
+      }
+      const { path } = exporter.write(id, target, ownedRules(args[2]))
+      exported = resolve(path)
       return { path }
     },
-    revealPath: (args) =>
-      nothing(() => {
-        deps.reveal(text(args, 0))
-      }),
+    revealPath: (args) => {
+      const path = text(args, 0)
+      if (exported === null || resolve(path) !== exported) {
+        throw new Error("Honya can only show the file it exported.")
+      }
+      deps.reveal(path)
+      return null
+    },
     sessionStats: (args) => sessionStats(sessions.get(sessionId(args, 0))),
   }
 }

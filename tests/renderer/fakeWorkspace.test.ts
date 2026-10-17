@@ -25,6 +25,10 @@ describe("fake workspace api", () => {
       total: FAKE_SCRIPT.length,
     })
     expect(await api.exportPreview(id)).toMatchObject({ translated: 4, openFlags: 1 })
+    await expect(api.exportWrite(id, "/elsewhere.ass", [])).rejects.toThrow(
+      "Choose where to save with Change…",
+    )
+    await api.pickExportPath(FAKE_SCRIPT_PATH)
     await expect(api.exportWrite(id, FAKE_SCRIPT_PATH, [])).rejects.toThrow(
       "Choose a different name",
     )

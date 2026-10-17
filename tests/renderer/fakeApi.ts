@@ -181,6 +181,9 @@ function fakeWorkspace(keys: Set<ProviderId>): {
   let clock = Date.parse("2026-10-17T10:00:00.000Z")
   let active: string | null = null
   let stopRequested = false
+  // Like main: export only where a preview or the save dialog offered, show only the export.
+  const offered = new Set<string>()
+  let exported: string | null = null
 
   const fail = <T>(message: string): Promise<T> => Promise.reject(new Error(message))
   const stamp = (): string => {
@@ -678,11 +681,13 @@ function fakeWorkspace(keys: Set<ProviderId>): {
           .filter((entry) => entry.origin === "manual")
           .map((entry) => entry.index)
         const variant = project(item.projectId).variant
+        const defaultPath = item.scriptPath.replace(/\.ass$/, `.${variant}.ass`)
+        offered.add(defaultPath)
         return {
           translated: translated.length,
           english: item.lines.length - translated.length,
           openFlags: translated.filter((entry) => entry.flag !== null).length,
-          defaultPath: item.scriptPath.replace(/\.ass$/, `.${variant}.ass`),
+          defaultPath,
           suggestions:
             manual.length === 0
               ? []
@@ -694,10 +699,16 @@ function fakeWorkspace(keys: Set<ProviderId>): {
                 ],
         }
       }),
-    pickExportPath: (defaultPath) => Promise.resolve(defaultPath),
+    pickExportPath: (defaultPath) => {
+      offered.add(defaultPath)
+      return Promise.resolve(defaultPath)
+    },
     exportWrite: (id, path, rules) =>
       attempt(() => {
         const item = session(id)
+        if (!offered.has(path)) {
+          throw new Error("Choose where to save with Change…")
+        }
         if (path === item.scriptPath) {
           throw new Error("Choose a different name: Honya never overwrites the original script.")
         }
@@ -705,10 +716,12 @@ function fakeWorkspace(keys: Set<ProviderId>): {
           rulesOf(owner).push(rule)
         }
         item.exportedTo = path
+        exported = path
         touch(item)
         return { path }
       }),
-    revealPath: () => Promise.resolve(),
+    revealPath: (path) =>
+      path === exported ? Promise.resolve() : fail("Honya can only show the file it exported."),
     sessionStats: (id) => attempt(() => stats(session(id))),
     onWorkspaceEvent: (listener) => {
       listeners.add(listener)

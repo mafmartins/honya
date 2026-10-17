@@ -180,7 +180,9 @@ describe("export dialog", () => {
 
   it("shows the refusal of the source path and lets you pick another", async () => {
     const picks = [FAKE_SCRIPT_PATH, "/videos/other.ass"]
-    const api = fakeApi({ pickExportPath: () => Promise.resolve(picks.shift() ?? null) })
+    const api = fakeApi()
+    const pick = api.pickExportPath.bind(api)
+    api.pickExportPath = () => pick(picks.shift() ?? "")
     const { id } = await translatedSession(api)
     const dialog = await openDialog(api, id)
     await within(dialog).findByText("Rule suggestions from your edits")

@@ -7,7 +7,11 @@ import { SaveStatusContext } from "./useSession"
 
 const SAVE_DELAY_MS = 600
 
-type Frame = { kind: "image"; src: string } | { kind: "none" } | { kind: "failed"; message: string }
+// "none": the video has no frame for this line. Failed requests aren't cached, so
+// the next visit to the line asks again.
+type Frame = { kind: "image"; src: string } | { kind: "none" }
+
+type StyleOwner = Extract<Owner, { kind: "style" }>
 
 interface FrameCache {
   video: string | null
@@ -29,7 +33,7 @@ export function LinePanel({
   line: LineView
   video: string | null
   owner: Owner
-  styleOwner: Owner
+  styleOwner: StyleOwner
   onLine: (line: LineView) => void
   // Esc in the editor: the list takes the focus back.
   onLeave: () => void
@@ -63,6 +67,7 @@ function LineFrame({
   const [cache, setCache] = useState<FrameCache>({ video, frames: new Map() })
   const frame = cache.video === video ? cache.frames.get(index) : undefined
   const known = frame !== undefined
+  const [failed, setFailed] = useState<{ index: number; message: string } | null>(null)
   useEffect(() => {
     if (video === null || known) {
       return
@@ -83,15 +88,18 @@ function LineFrame({
         store(src === null ? { kind: "none" } : { kind: "image", src })
       },
       (error: unknown) => {
-        store({ kind: "failed", message: errorMessage(error) })
+        if (live) {
+          setFailed({ index, message: errorMessage(error) })
+        }
       },
     )
     return () => {
       live = false
+      setFailed(null)
     }
   }, [api, sessionId, index, video, known])
 
-  if (video === null || frame?.kind === "none") {
+  if (video === null) {
     return (
       <div className="line-frame line-frame-empty">
         <p>Attach a video to see frames</p>
@@ -100,12 +108,14 @@ function LineFrame({
   }
   return (
     <div className="line-frame">
-      {frame === undefined ? (
-        <p>Getting the frame…</p>
-      ) : frame.kind === "image" ? (
+      {frame?.kind === "image" ? (
         <img src={frame.src} alt={`Frame for line ${String(index + 1)}`} />
+      ) : frame?.kind === "none" ? (
+        <p>Couldn't get the frame for this line.</p>
+      ) : failed?.index === index ? (
+        <p>{failed.message}</p>
       ) : (
-        <p>{frame.message}</p>
+        <p>Getting the frame…</p>
       )}
     </div>
   )
@@ -138,7 +148,7 @@ function LineEditor({
   sessionId: string
   line: LineView
   owner: Owner
-  styleOwner: Owner
+  styleOwner: StyleOwner
   onLine: (line: LineView) => void
   onLeave: () => void
 }): React.JSX.Element {
@@ -151,6 +161,10 @@ function LineEditor({
   const typed = useRef(text)
   const sent = useRef<string | null>(text)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Set by typing here; a save on blur doesn't clear it, so Ask AI again still confirms.
+  const edited = useRef(false)
+  // Settles the "Saving…" shown from the first keystroke until that typing is saved.
+  const settleTyping = useRef<(() => void) | null>(null)
   const [busy, setBusy] = useState<Busy | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -164,31 +178,36 @@ function LineEditor({
     setText(words)
   }, [])
 
-  const cancelTimer = (): void => {
+  const cancelTimer = useCallback((): (() => void) => {
     if (timer.current !== null) {
       clearTimeout(timer.current)
       timer.current = null
     }
-  }
+    const settle = settleTyping.current ?? (() => undefined)
+    settleTyping.current = null
+    return settle
+  }, [])
 
   const save = useCallback((): Promise<void> => {
-    if (timer.current !== null) {
-      clearTimeout(timer.current)
-      timer.current = null
-    }
+    const settle = cancelTimer()
     const words = typed.current
     if (words === sent.current) {
+      settle()
       return Promise.resolve()
     }
     sent.current = words
-    const work = api.editLine(sessionId, index, words).then(onLine)
+    const work = api.editLine(sessionId, index, words).then((next) => {
+      onLine(next)
+      setFailure(null)
+    })
     markSaving(work)
+    work.then(settle, settle)
     return work.catch((error: unknown) => {
       sent.current = null
       setFailure(errorMessage(error))
       throw error
     })
-  }, [api, sessionId, index, onLine, markSaving])
+  }, [api, sessionId, index, onLine, markSaving, cancelTimer])
 
   // Leaving the line (or the page) sends what is still waiting.
   const saveRef = useRef(save)
@@ -237,10 +256,11 @@ function LineEditor({
 
   const ask = (): void => {
     setConfirming(false)
-    cancelTimer()
+    cancelTimer()()
     run("ask", async () => {
       const next = await api.retranslate(sessionId, index, hint.trim())
       onLine(next)
+      edited.current = false
       show(next.words ?? "")
     })
   }
@@ -267,10 +287,7 @@ function LineEditor({
           <label className="field-label" htmlFor={editorId}>
             Portuguese
           </label>
-          <span
-            className={over ? "line-count over" : "line-count"}
-            {...(over ? { "aria-live": "polite" } : {})}
-          >
+          <span className={over ? "line-count over" : "line-count"} aria-live="polite">
             {`${String(count)} / ${String(line.budget)}`}
           </span>
         </span>
@@ -281,9 +298,19 @@ function LineEditor({
           onChange={(event) => {
             const next = event.target.value
             typed.current = next
+            edited.current = true
             setText(next)
             setNotice(null)
-            cancelTimer()
+            if (timer.current !== null) {
+              clearTimeout(timer.current)
+            }
+            if (settleTyping.current === null) {
+              markSaving(
+                new Promise<void>((resolve) => {
+                  settleTyping.current = resolve
+                }),
+              )
+            }
             timer.current = setTimeout(() => {
               timer.current = null
               void save().catch(() => undefined)
@@ -324,8 +351,8 @@ function LineEditor({
             type="button"
             disabled={busy !== null || confirming}
             onClick={() => {
-              // A line you wrote, or one you are still typing in, is yours.
-              if (line.origin === "manual" || typed.current !== sent.current) {
+              // A line you wrote, or edited here (even if just saved), is yours.
+              if (line.origin === "manual" || edited.current) {
                 setConfirming(true)
               } else {
                 ask()

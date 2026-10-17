@@ -19,7 +19,7 @@ export function RuleDraftDialog({
 }: {
   draft: Rule
   owner: Owner
-  styleOwner: Owner
+  styleOwner: Extract<Owner, { kind: "style" }>
   onSaved: () => void
   onClose: () => void
 }): React.JSX.Element {
@@ -40,7 +40,7 @@ export function RuleDraftDialog({
       : source.trim() === "" || pt.trim() === ""
         ? null
         : { kind: "glossary", source: source.trim(), pt: pt.trim() }
-  const styleLabel = styleOwner.kind === "style" ? styleName(styleOwner.variant) : "Style"
+  const styleLabel = styleName(styleOwner.variant)
 
   const save = (): void => {
     if (rule === null) {

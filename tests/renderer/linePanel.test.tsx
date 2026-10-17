@@ -169,6 +169,35 @@ describe("line panel", () => {
     expect(within(grid()).getByText("pt: Where are we going? (casual)")).toBeTruthy()
   })
 
+  it("confirms before asking again after you edit an AI line, even once saved", async () => {
+    const api = fakeApi()
+    const retranslate = vi.spyOn(api, "retranslate")
+    const { id } = await translatedSession(api)
+    open(api, id)
+    await select("pt: Hello.")
+    fireEvent.change(editor(), { target: { value: "Olá." } })
+    fireEvent.blur(editor())
+    fireEvent.click(within(panel()).getByRole("button", { name: "Ask AI again" }))
+    expect(within(panel()).getByText("This replaces your translation. Ask anyway?")).toBeTruthy()
+    expect(retranslate).not.toHaveBeenCalled()
+  })
+
+  it("says Saving… from the first keystroke until the edit is saved", async () => {
+    const api = fakeApi()
+    const { id } = await translatedSession(api)
+    open(api, id)
+    await select("pt: Hello.")
+    expect(screen.getByText("Saved")).toBeTruthy()
+    fireEvent.change(editor(), { target: { value: "Olá" } })
+    expect(await screen.findByText("Saving…")).toBeTruthy()
+    await waitFor(
+      () => {
+        expect(screen.getByText("Saved")).toBeTruthy()
+      },
+      { timeout: 2000 },
+    )
+  })
+
   it("asks AI again on an AI line without confirming", async () => {
     const api = fakeApi()
     const retranslate = vi.spyOn(api, "retranslate")
@@ -288,6 +317,34 @@ describe("line panel", () => {
     await select("pt: Hello.")
     expect(await within(panel()).findByRole("img", { name: "Frame for line 1" })).toBeTruthy()
     expect(frame.mock.calls.filter(([, index]) => index === 0)).toHaveLength(1)
+  })
+
+  it("says when the video has no frame for the line", async () => {
+    const api = fakeApi()
+    const { id } = await translatedSession(api)
+    await api.pickVideoForSession(id)
+    api.lineFrame = () => Promise.resolve(null)
+    open(api, id)
+    await select("pt: Hello.")
+    expect(await within(panel()).findByText("Couldn't get the frame for this line.")).toBeTruthy()
+    expect(within(panel()).queryByText("Attach a video to see frames")).toBeNull()
+  })
+
+  it("asks for a failed frame again when you come back to the line", async () => {
+    const api = fakeApi()
+    const { id } = await translatedSession(api)
+    await api.pickVideoForSession(id)
+    const real = api.lineFrame.bind(api)
+    let fail = true
+    api.lineFrame = (session, index) =>
+      fail ? Promise.reject(new Error("ffmpeg could not read the video.")) : real(session, index)
+    open(api, id)
+    await select("pt: Hello.")
+    expect(await within(panel()).findByText("ffmpeg could not read the video.")).toBeTruthy()
+    fail = false
+    await select("pt: Run!")
+    await select("pt: Hello.")
+    expect(await within(panel()).findByRole("img", { name: "Frame for line 1" })).toBeTruthy()
   })
 
   it("says it is getting the frame while it loads", async () => {

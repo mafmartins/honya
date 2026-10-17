@@ -1,22 +1,14 @@
-/* Lays the app's screens out side by side; the app's own styles.css does the rest. */
+/* Lays the app's windows out one under another; the app's own styles.css does the rest. */
 body {
-  display: block;
+  height: auto;
+  overflow: auto;
   padding: 40px;
 }
 
 .gallery {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 56px 48px;
-  align-items: flex-start;
-}
-
-.gallery-frame {
-  width: 880px;
-}
-
-.gallery.single .gallery-frame {
-  margin: 0 auto;
+  display: grid;
+  gap: 56px;
+  justify-content: start;
 }
 
 .gallery-title {
@@ -28,6 +20,34 @@ body {
   opacity: 0.6;
 }
 
+/* One app window. The transform keeps the dialogs' fixed backdrop inside it. */
+.gallery-window {
+  width: 1440px;
+  height: 900px;
+  overflow: hidden;
+  transform: translateZ(0);
+  outline: 1.5px solid #2a2420;
+}
+
+.gallery-window .shell {
+  height: 100%;
+}
+
+/* ?screen=<key>: the window alone, filling a 1440×900 viewport. */
+body:has(.gallery.single) {
+  padding: 0;
+  overflow: hidden;
+}
+
 .gallery.single .gallery-title {
   display: none;
+}
+
+.gallery.single .gallery-window {
+  outline: none;
+}
+
+/* Headless captures run on virtual time, which can freeze a transition halfway. */
+.gallery-window * {
+  transition: none !important;
 }

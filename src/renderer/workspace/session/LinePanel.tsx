@@ -209,19 +209,23 @@ function LineEditor({
     })
   }, [api, sessionId, index, onLine, markSaving, cancelTimer])
 
-  // Leaving the line (or the page) sends what is still waiting.
+  // Leaving the line (or the page), or closing the window, sends what is still waiting.
   const saveRef = useRef(save)
   useEffect(() => {
     saveRef.current = save
   }, [save])
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const flush = (): void => {
       if (timer.current !== null) {
         void saveRef.current().catch(() => undefined)
       }
-    },
-    [],
-  )
+    }
+    window.addEventListener("beforeunload", flush)
+    return () => {
+      window.removeEventListener("beforeunload", flush)
+      flush()
+    }
+  }, [])
 
   // The line changed from elsewhere (an AI run, Accept): show it unless you have
   // unsaved typing. Main trims what it saves, so your own save coming back without

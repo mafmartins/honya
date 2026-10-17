@@ -140,6 +140,31 @@ describe("line panel", () => {
     expect(editor().value).toBe("Olá mundo")
   })
 
+  it("saves a pending edit when the window is about to close", async () => {
+    const api = fakeApi()
+    const edit = vi.spyOn(api, "editLine")
+    const { id } = await translatedSession(api)
+    edit.mockClear()
+    open(api, id)
+    await select("pt: Hello.")
+    fireEvent.change(editor(), { target: { value: "Olá." } })
+    expect(edit).not.toHaveBeenCalled()
+    fireEvent(window, new Event("beforeunload"))
+    expect(edit).toHaveBeenCalledWith(id, 0, "Olá.")
+  })
+
+  it("saves a pending edit when the page goes away", async () => {
+    const api = fakeApi()
+    const edit = vi.spyOn(api, "editLine")
+    const { id } = await translatedSession(api)
+    edit.mockClear()
+    open(api, id)
+    await select("pt: Hello.")
+    fireEvent.change(editor(), { target: { value: "Olá." } })
+    cleanup()
+    expect(edit).toHaveBeenCalledWith(id, 0, "Olá.")
+  })
+
   it("counts the visible characters and marks the count over the budget", async () => {
     const api = fakeApi()
     const { id } = await translatedSession(api)

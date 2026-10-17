@@ -261,6 +261,19 @@ describe("review handlers", () => {
     expect(result.outputPath).toBe("/s/subs.pt-pt.ass")
   })
 
+  it("remembers the translator's edits for the series", () => {
+    const { handlers, id, profiles, seriesId } = setup()
+    handlers.accept(id, 1, "Os Pilares chegaram.")
+    handlers.finish(id)
+    expect(profiles.loadSeries("pt-pt", seriesId).corrections).toEqual([
+      {
+        en: "The Hashira are here.",
+        draft: "Os Hashira estão aqui.",
+        final: "Os Pilares chegaram.",
+      },
+    ])
+  })
+
   it("throws for a missing session and discards the file", () => {
     const { handlers, id, sessions } = setup()
     handlers.discard(id)

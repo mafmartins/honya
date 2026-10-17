@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { compileCard, emptyBase, importExample, saveRule } from "../../src/core/library/card"
+import {
+  addCorrections,
+  compileCard,
+  emptyBase,
+  importExample,
+  saveRule,
+} from "../../src/core/library/card"
 import { createMemoryStore } from "../../src/core/library/store"
 
 describe("style card", () => {
@@ -50,5 +56,33 @@ describe("style card", () => {
     const store = createMemoryStore()
     store.saveBase(emptyBase("pt-pt"))
     expect(JSON.stringify(store.loadCard("pt-pt", "missing"))).not.toContain("sk-")
+  })
+})
+
+describe("corrections", () => {
+  const series = { id: "s", variant: "pt-pt" as const, name: "S", rules: [] }
+
+  it("keeps real changes, newest last, replacing an older correction of the same line", () => {
+    const once = addCorrections(series, [
+      { en: "Damn!", draft: "Droga!", final: "Raios!" },
+      { en: "Hi.", draft: "Olá.", final: "Olá." },
+    ])
+    const twice = addCorrections(once, [{ en: "Damn!", draft: "Raios!", final: "Bolas!" }])
+    expect(twice.corrections).toEqual([{ en: "Damn!", draft: "Raios!", final: "Bolas!" }])
+    expect(addCorrections(series, [])).toBe(series)
+  })
+
+  it("keeps the last sixty and gives the card the last twenty", () => {
+    const many = Array.from({ length: 70 }, (_, i) => ({
+      en: `line ${String(i)}`,
+      draft: "a",
+      final: "b",
+    }))
+    const kept = addCorrections(series, many)
+    expect(kept.corrections).toHaveLength(60)
+    const card = compileCard(emptyBase("pt-pt"), kept)
+    expect(card.corrections).toHaveLength(20)
+    expect(card.corrections?.at(-1)?.en).toBe("line 69")
+    expect(compileCard(emptyBase("pt-pt"), series)).not.toHaveProperty("corrections")
   })
 })

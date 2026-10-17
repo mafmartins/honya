@@ -106,6 +106,12 @@ export function translatorSystem(card: StyleCard, brief: string): string {
     "terms: names, places, techniques and recurring phrases you gave a fixed Portuguese form in this reply and that are not in the glossary yet; [] if none.",
     "Return one entry per requested id, with the same ids, and nothing but the JSON.",
   )
+  const corrections = card.corrections ?? []
+  if (corrections.length > 0) {
+    parts.push(
+      `Corrections this translator made to earlier drafts in this series. Make the same kind of choices:\n${corrections.map((c) => `${oneLine(c.en)} => ${oneLine(c.draft)} => corrected: ${oneLine(c.final)}`).join("\n")}`,
+    )
+  }
   const voice = voiceSample(card.voice)
   if (voice !== "") {
     parts.push(`Lines from the translator's earlier work, to match their voice:\n${voice}`)

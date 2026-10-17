@@ -1,4 +1,4 @@
-import type { BaseProfile, Rule, SeriesProfile, StyleCard, Variant } from "./types"
+import type { BaseProfile, Correction, Rule, SeriesProfile, StyleCard, Variant } from "./types"
 
 const BASE_CPS_LIMIT = 17
 
@@ -45,11 +45,28 @@ export function saveRule(
   }
 }
 
+// How many of the series' latest corrections go into each run.
+export const CARD_CORRECTIONS = 20
+// How many a series keeps.
+export const KEPT_CORRECTIONS = 60
+
+// Adds review corrections to a series, newest last; a later correction of the same
+// English line replaces the earlier one.
+export function addCorrections(series: SeriesProfile, added: readonly Correction[]): SeriesProfile {
+  const fresh = added.filter((c) => c.final.trim() !== "" && c.final !== c.draft)
+  if (fresh.length === 0) {
+    return series
+  }
+  const replaced = new Set(fresh.map((c) => c.en))
+  const kept = (series.corrections ?? []).filter((c) => !replaced.has(c.en))
+  return { ...series, corrections: [...kept, ...fresh].slice(-KEPT_CORRECTIONS) }
+}
+
 export function compileCard(base: BaseProfile, series: SeriesProfile): StyleCard {
   if (base.variant !== series.variant) {
     throw new Error("base and series variants differ")
   }
-  return {
+  const card: StyleCard = {
     variant: base.variant,
     seriesId: series.id,
     revision: base.cardRevision,
@@ -57,4 +74,9 @@ export function compileCard(base: BaseProfile, series: SeriesProfile): StyleCard
     voice: base.examples.map((example) => example.text).join("\n"),
     rules: [...base.rules, ...series.rules],
   }
+  const corrections = (series.corrections ?? []).slice(-CARD_CORRECTIONS)
+  if (corrections.length > 0) {
+    card.corrections = corrections
+  }
+  return card
 }

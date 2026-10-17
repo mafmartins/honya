@@ -1,4 +1,4 @@
-import type { BaseProfile, ExampleScript, Rule, SeriesProfile, Variant } from "./types"
+import type { BaseProfile, Correction, ExampleScript, Rule, SeriesProfile, Variant } from "./types"
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -61,5 +61,30 @@ export function readSeriesProfile(value: unknown): SeriesProfile | null {
   if (typeof value.id !== "string" || typeof value.name !== "string" || !isRuleList(value.rules)) {
     return null
   }
-  return { id: value.id, variant: value.variant, name: value.name, rules: value.rules }
+  const series: SeriesProfile = {
+    id: value.id,
+    variant: value.variant,
+    name: value.name,
+    rules: value.rules,
+  }
+  if (value.corrections !== undefined) {
+    if (!Array.isArray(value.corrections) || !value.corrections.every(isCorrection)) {
+      return null
+    }
+    series.corrections = value.corrections.map((c) => ({
+      en: c.en,
+      draft: c.draft,
+      final: c.final,
+    }))
+  }
+  return series
+}
+
+function isCorrection(value: unknown): value is Correction {
+  return (
+    isRecord(value) &&
+    typeof value.en === "string" &&
+    typeof value.draft === "string" &&
+    typeof value.final === "string"
+  )
 }

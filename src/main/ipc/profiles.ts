@@ -1,8 +1,14 @@
 import { randomUUID } from "node:crypto"
-import { emptyBase, importExample } from "../../core/library/card"
+import { addCorrections, emptyBase, importExample } from "../../core/library/card"
 import { exampleText } from "../../core/library/example"
 import type { FileProfileStore } from "../../core/library/fileStore"
-import type { BaseProfile, Rule, SeriesProfile, Variant } from "../../core/library/types"
+import type {
+  BaseProfile,
+  Correction,
+  Rule,
+  SeriesProfile,
+  Variant,
+} from "../../core/library/types"
 
 export interface SeriesSummary {
   id: string
@@ -30,6 +36,8 @@ export interface ProfileHandlers {
   loadBase(variant: Variant): LoadedBase
   saveBase(base: BaseProfile): BaseProfile
   importExample(variant: Variant, name: string, text: string, dialogueStyles: string[]): BaseProfile
+  loadSeries(variant: Variant, id: string): SeriesProfile
+  addCorrections(variant: Variant, id: string, corrections: Correction[]): void
 }
 
 export function createProfileHandlers(
@@ -88,6 +96,16 @@ export function createProfileHandlers(
     },
     deleteSeries(variant, id) {
       store.deleteSeries(variant, id)
+    },
+    loadSeries(variant, id) {
+      return requireSeries(variant, id)
+    },
+    addCorrections(variant, id, corrections) {
+      const series = requireSeries(variant, id)
+      const next = addCorrections(series, corrections)
+      if (next !== series) {
+        store.saveSeries(next)
+      }
     },
     loadSeriesRules(variant, id) {
       return requireSeries(variant, id).rules

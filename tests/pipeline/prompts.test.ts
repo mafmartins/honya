@@ -41,6 +41,14 @@ describe("translator instructions", () => {
     expect(translatorSystem({ ...card, variant: "pt-br" }, "")).toContain("Damn it! => Droga!")
   })
 
+  it("show the series' past corrections", () => {
+    const system = translatorSystem(
+      { ...card, corrections: [{ en: "Damn!", draft: "Droga!", final: "Raios!" }] },
+      "",
+    )
+    expect(system).toContain("Make the same kind of choices:\nDamn! => Droga! => corrected: Raios!")
+  })
+
   it("explain the marks the reply may use", () => {
     const system = translatorSystem(card, "")
     for (const mark of ["- clean:", "- mild:", "- hard-call:", "- doubt:"]) {

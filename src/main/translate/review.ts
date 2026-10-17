@@ -290,6 +290,18 @@ export function createReviewHandlers(deps: ReviewDeps): ReviewHandlers {
         spend: session.spend,
         outputPath: session.outputPath,
       })
+      // The translator's edits teach later episodes of this series.
+      try {
+        deps.profiles.addCorrections(
+          session.variant,
+          session.seriesId,
+          lines
+            .filter((line) => line.edited && line.words !== line.stored)
+            .map((line) => ({ en: line.english, draft: line.stored, final: line.words })),
+        )
+      } catch {
+        // The file is written; a series deleted meanwhile just doesn't learn.
+      }
       session.phase = "done"
       deps.sessions.save(session)
       deps.sessions.clearFrames(id)

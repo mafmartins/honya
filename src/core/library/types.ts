@@ -26,11 +26,20 @@ export interface BaseProfile {
   cardRevision: number
 }
 
+// A line the translator changed in review: the English, the model's draft and their
+// version. Kept per series and shown to the model on later episodes.
+export interface Correction {
+  en: string
+  draft: string
+  final: string
+}
+
 export interface SeriesProfile {
   id: string
   variant: Variant
   name: string
   rules: Rule[]
+  corrections?: Correction[]
 }
 
 export interface StyleCard {
@@ -40,6 +49,7 @@ export interface StyleCard {
   cpsLimit: number
   voice: string
   rules: Rule[]
+  corrections?: Correction[]
 }
 
 export interface ProfileStore {

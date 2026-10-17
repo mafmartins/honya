@@ -110,8 +110,7 @@ function loadCard(
     throw new Error("That series no longer exists.")
   }
   const { base } = profiles.loadBase(variant)
-  const rules = profiles.loadSeriesRules(variant, seriesId)
-  const card = compileCard(base, { id: seriesId, variant, name: found.name, rules })
+  const card = compileCard(base, profiles.loadSeries(variant, seriesId))
   return { card, seriesName: found.name }
 }
 

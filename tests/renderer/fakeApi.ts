@@ -577,7 +577,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
           if (entry.flag !== null) {
             entry.resolution = "edited"
           }
-          entry.words = words
+          entry.words = words.trim()
           entry.origin = "manual"
           entry.flag = null
         }

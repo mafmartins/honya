@@ -118,6 +118,28 @@ describe("line panel", () => {
     expect(editor().value).toBe("Olá, amigo")
   })
 
+  it("keeps a trailing space through a save, so you can keep typing", async () => {
+    const api = fakeApi()
+    const edit = vi.spyOn(api, "editLine")
+    const { id } = await translatedSession(api)
+    edit.mockClear()
+    open(api, id)
+    await select("pt: Hello.")
+    fireEvent.change(editor(), { target: { value: "Olá " } })
+    await waitFor(
+      () => {
+        expect(edit).toHaveBeenCalledWith(id, 0, "Olá ")
+      },
+      { timeout: 2000 },
+    )
+    expect(await within(grid()).findByText("Olá")).toBeTruthy()
+    expect(editor().value).toBe("Olá ")
+    fireEvent.change(editor(), { target: { value: `${editor().value}mundo` } })
+    fireEvent.blur(editor())
+    expect(await within(grid()).findByText("Olá mundo")).toBeTruthy()
+    expect(editor().value).toBe("Olá mundo")
+  })
+
   it("counts the visible characters and marks the count over the budget", async () => {
     const api = fakeApi()
     const { id } = await translatedSession(api)

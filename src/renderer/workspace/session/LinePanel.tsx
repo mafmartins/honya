@@ -224,10 +224,11 @@ function LineEditor({
   )
 
   // The line changed from elsewhere (an AI run, Accept): show it unless you have
-  // unsaved typing.
+  // unsaved typing. Main trims what it saves, so your own save coming back without
+  // its trailing space is not a change.
   const words = line.words ?? ""
   useEffect(() => {
-    if (typed.current === sent.current && words !== typed.current) {
+    if (typed.current === sent.current && words !== typed.current.trim()) {
       show(words)
     }
   }, [words, show])

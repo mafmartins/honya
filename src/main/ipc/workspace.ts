@@ -86,10 +86,21 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
     getStyle: (args) => projects.getStyle(variant(args, 0)),
     createProject: (args) => projects.createProject(text(args, 0), variant(args, 1)),
     updateProject: (args) => projects.updateProject(text(args, 0), projectPatch(args[1])),
-    deleteProject: (args) =>
-      nothing(() => {
-        projects.deleteProject(text(args, 0))
-      }),
+    // A project's sessions go with it; a running one has to be stopped first.
+    deleteProject: (args) => {
+      const id = text(args, 0)
+      projects.getProject(id)
+      const owned = sessions.list().filter((summary) => summary.projectId === id)
+      const running = ai.activeId()
+      if (owned.some((summary) => summary.id === running)) {
+        throw new Error("Stop the AI run before deleting this project.")
+      }
+      for (const summary of owned) {
+        sessions.remove(summary.id)
+      }
+      projects.deleteProject(id)
+      return null
+    },
     updateStyle: (args) => projects.updateStyle(variant(args, 0), stylePatch(args[1])),
     saveRules: (args) =>
       nothing(() => {

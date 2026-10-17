@@ -31,4 +31,20 @@ describe("fake workspace api", () => {
     api.emitWorkspace({ type: "run-ended", sessionId: id, outcome: "stopped", message: null })
     expect(events).toHaveLength(4)
   })
+
+  it("deletes a project's sessions with it, but not during its AI run", async () => {
+    const api = fakeApi()
+    const project = await api.createProject("Frieren", "pt-pt")
+    const id = await api.newSession(project.id)
+    await api.pickScriptForSession(id)
+    await api.runAi(id)
+    await expect(api.deleteProject(project.id)).rejects.toThrow(
+      "Stop the AI run before deleting this project.",
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await api.deleteProject(project.id)
+    expect(await api.recentSessions()).toEqual([])
+    expect((await api.launchInfo()).continueSession).toBeNull()
+    await expect(api.openSession(id)).rejects.toThrow("This session was not found.")
+  })
 })

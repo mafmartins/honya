@@ -559,6 +559,13 @@ function fakeWorkspace(keys: Set<ProviderId>): {
     deleteProject: (id) =>
       attempt(() => {
         project(id)
+        const owned = sessionsOf(id)
+        if (owned.some((item) => item.id === active)) {
+          throw new Error("Stop the AI run before deleting this project.")
+        }
+        for (const item of owned) {
+          sessions.delete(item.id)
+        }
         projects.delete(id)
       }),
     updateStyle: (variant, patch) =>

@@ -19,7 +19,7 @@ const SCRIPT = [
   "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello there.",
 ].join("\n")
 
-function setup(keys: string[] = []) {
+function setup(keys: string[] = [], gate: Promise<never> | null = null) {
   const root = mkdtempSync(join(tmpdir(), "honya-ws-ipc-"))
   const scriptPath = join(root, "ep01.ass")
   writeFileSync(scriptPath, SCRIPT, "utf8")
@@ -48,7 +48,7 @@ function setup(keys: string[] = []) {
   })
   const ai = createAiService({
     sessions,
-    completerFor: () => () => Promise.reject(new Error("offline")),
+    completerFor: () => () => gate ?? Promise.reject(new Error("offline")),
     grabFrame: () => Promise.resolve(null),
     emit: () => undefined,
     knownRules: () => [],
@@ -76,7 +76,7 @@ function setup(keys: string[] = []) {
     revealLog: () => undefined,
     reveal: () => undefined,
   })
-  return { handlers, projects }
+  return { handlers, projects, ai }
 }
 
 describe("workspace ipc handlers", () => {
@@ -120,5 +120,40 @@ describe("workspace ipc handlers", () => {
     expect(handlers.projectSessions([one.id])).toMatchObject([{ id: second }, { id: first }])
     const view = await handlers.pickScriptForSession([first])
     expect(view).toMatchObject({ scriptName: "ep01.ass", lines: [{ english: "Hello there." }] })
+  })
+
+  it("deletes a project's sessions with it", async () => {
+    const { handlers, projects } = setup()
+    const gone = projects.createProject("Frieren", "pt-pt")
+    const kept = projects.createProject("Dandadan", "pt-pt")
+    const first = handlers.newSession([gone.id])
+    await handlers.pickScriptForSession([first])
+    handlers.newSession([gone.id])
+    const other = handlers.newSession([kept.id])
+    handlers.deleteProject([gone.id])
+    expect(handlers.listProjects([])).toMatchObject([{ id: kept.id }])
+    expect(handlers.recentSessions([])).toMatchObject([{ id: other }])
+    expect(handlers.launchInfo([])).toMatchObject({ continueSession: { id: other } })
+    expect(() => handlers.openSession([first])).toThrow("This session was not found.")
+  })
+
+  it("refuses to delete a project while the AI runs one of its sessions", async () => {
+    let release: (reason: Error) => void = () => undefined
+    const gate = new Promise<never>((_resolve, reject) => {
+      release = reject
+    })
+    const { handlers, projects, ai } = setup([], gate)
+    const project = projects.createProject("Frieren", "pt-pt")
+    const id = handlers.newSession([project.id])
+    await handlers.pickScriptForSession([id])
+    await handlers.runAi([id])
+    expect(() => handlers.deleteProject([project.id])).toThrow(
+      "Stop the AI run before deleting this project.",
+    )
+    expect(handlers.projectSessions([project.id])).toHaveLength(1)
+    release(new Error("stopped"))
+    await ai.idle()
+    handlers.deleteProject([project.id])
+    expect(handlers.projectSessions([project.id])).toHaveLength(0)
   })
 })

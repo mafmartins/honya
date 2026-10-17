@@ -45,158 +45,44 @@ body {
   height: 100%;
 }
 
-.card {
-  width: min(880px, 100%);
-  margin: 0 auto;
-  box-sizing: border-box;
-  padding: 28px 32px 32px;
-  background: #faf7f2;
-  color: #2a2420;
-  border: 1.5px solid #2a2420;
-  box-shadow: 7px 7px 0 #2a2420;
-}
-
-.card-header p,
-.job p {
+/* Base controls: ink on paper, 1.5px borders, 40px tall, stamp shadows on buttons.
+   Layouts space things with gap, so nothing here carries a margin. */
+p {
   margin: 0;
 }
 
-.job {
-  margin-bottom: 8px;
-}
-
-.job p + p {
-  margin-top: 4px;
-}
-
-.review-body,
-.split {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-  margin-top: 20px;
-}
-
-.decision {
-  border-left: 1.5px dashed #2a2420;
-  padding-left: 28px;
-}
-
-.faded {
-  margin: 0 0 12px;
-  opacity: 0.4;
-}
-
-.current {
-  margin: 0 0 8px;
-  font-size: 22px;
-}
-
-.note,
-.accept,
-.action {
-  color: #e36b1e;
-}
-
-.english,
-.rule {
-  margin: 0 0 20px;
+ul {
+  margin: 0;
 }
 
 label {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  margin: 0 0 14px;
+  gap: var(--space-6);
+  margin: 0;
 }
 
 input,
 select,
+textarea,
 button {
   font: inherit;
-  color: #2a2420;
-  background: #faf7f2;
-  border: 1.5px solid #2a2420;
-  padding: 8px 10px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
 }
 
-button {
-  margin: 0 8px 8px 0;
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 var(--space-10);
 }
 
-ul {
-  margin: 0 0 16px;
-  padding-left: 18px;
-}
-
-p {
-  margin: 0 0 8px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 16px;
-}
-
-.link {
-  border: none;
-  padding: 0;
+input[type="checkbox"],
+input[type="radio"] {
   margin: 0;
-  background: none;
-  color: #e36b1e;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.error-line {
-  margin: 0 0 16px;
-  color: #e36b1e;
-  border-left: 3px solid #e36b1e;
-  padding-left: 10px;
-}
-
-.picked {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.picked > .slot {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: 1.5px dashed #2a2420;
-  padding: 8px 10px;
-}
-
-.picked > input {
-  flex: 1;
-  min-width: 0;
-}
-
-.picked > button {
-  flex: none;
-  margin: 0;
-}
-
-.muted {
-  opacity: 0.6;
-}
-
-.field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  margin: 0 0 14px;
-}
-
-section + section {
-  margin-top: 20px;
+  accent-color: var(--color-fill-accent);
 }
 
 input:disabled,
@@ -205,24 +91,28 @@ select:disabled {
 }
 
 button {
+  box-sizing: border-box;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 var(--space-14);
   cursor: pointer;
-  box-shadow: 3px 3px 0 #2a2420;
+  box-shadow: var(--shadow-stamp-small) var(--color-shadow);
   transition:
     transform 60ms ease-out,
     box-shadow 60ms ease-out;
 }
 
 button:hover:not(:disabled) {
-  background: #f3efe6;
+  background: var(--color-bg-hover);
 }
 
 button:active:not(:disabled) {
   transform: translate(3px, 3px);
-  box-shadow: 0 0 0 #2a2420;
+  box-shadow: none;
 }
 
 button:focus-visible {
-  outline: 2px solid #e36b1e;
+  outline: 2px solid var(--color-border-accent);
   outline-offset: 2px;
 }
 
@@ -232,146 +122,56 @@ button:disabled {
   box-shadow: none;
 }
 
-button.link {
-  box-shadow: none;
-}
-
-button.link:hover:not(:disabled) {
-  background: none;
-}
-
-button.link:active:not(:disabled) {
-  transform: none;
-}
-
-.live-scroll {
-  max-height: 240px;
-  overflow-y: auto;
-  margin: 0 0 16px;
-  border: 1.5px dashed #2a2420;
-}
-
-ul.live {
-  list-style: none;
+.error-line {
   margin: 0;
-  padding: 0;
+  padding-left: var(--space-10);
+  color: var(--color-text-accent);
+  border-left: var(--border-accent-width) solid var(--color-border-accent);
 }
 
-.live li {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px 16px;
-  padding: 8px 10px;
-  overflow-wrap: anywhere;
-}
-
-.live li + li {
-  border-top: 1px dashed #2a2420;
-}
-
-.live .english {
+.muted {
   opacity: 0.6;
 }
 
-.live .note,
-.live li.noted .note {
-  grid-column: 1 / -1;
-  color: #e36b1e;
-}
-
-progress {
-  width: 100%;
-  accent-color: #e36b1e;
-}
-
-.review {
-  min-width: 0;
-}
-
-.review-cols {
+/* Dialogue styles checklist: loading a script with unclear styles, learning */
+.style-checklist {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
-  margin: 12px 0;
+  justify-items: start;
+  gap: var(--space-14);
 }
 
-.review p,
-.review li {
-  overflow-wrap: anywhere;
-}
-
-.review .faded {
-  opacity: 0.5;
-}
-
-.review .current {
-  font-weight: 600;
-}
-
-.review .note {
-  color: #e36b1e;
-}
-
-.review textarea {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 80px;
-}
-
-.review-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.review-all {
-  max-height: 160px;
-  overflow-y: auto;
-  border: 1.5px dashed #2a2420;
-}
-
-.review-all ul,
-.proposal ul {
-  list-style: none;
-  margin: 0;
+ul.style-list {
+  display: grid;
+  justify-self: stretch;
   padding: 0;
+  list-style: none;
+  border-top: 1px dashed var(--color-border-default);
 }
 
-.review-all button {
-  text-align: left;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.review-all button.flagged {
-  color: #e36b1e;
-}
-
-.review-all button.here {
-  font-weight: 600;
-}
-
-.proposal label {
-  display: block;
-}
-
-.report div {
+.style-row {
   display: flex;
-  gap: 12px;
-  margin: 0 0 4px;
+  align-items: center;
+  gap: var(--space-16);
+  min-height: 44px;
+  padding: 0 var(--space-10);
+  border-bottom: 1px dashed var(--color-border-default);
 }
 
-.report dt {
-  flex: 0 0 220px;
-  font-weight: 600;
-}
-
-.report dd {
+.style-name {
   flex: 1;
   min-width: 0;
-  margin: 0;
   overflow-wrap: anywhere;
+}
+
+label.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.style-actions {
+  display: flex;
+  gap: var(--space-8);
 }
 
 /* Workspace shell */
@@ -413,7 +213,7 @@ progress {
 .menu-brand {
   margin: 0;
   font-size: 22px;
-  line-height: 1.2;
+  line-height: 40px;
   font-weight: 600;
 }
 
@@ -450,13 +250,18 @@ progress {
   list-style: none;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-6);
+  gap: 0;
 }
 
 .menu-group {
   display: grid;
   gap: var(--space-6);
-  padding-top: var(--space-8);
+  padding: var(--space-10) 0 var(--space-6);
+}
+
+/* Lined up with the items' text, which sits after their accent bar. */
+.menu-group > .menu-label {
+  padding-left: calc(var(--border-accent-width) + var(--space-10));
 }
 
 .menu-group .menu-nav {
@@ -469,7 +274,7 @@ button.menu-item {
   width: 100%;
   min-height: 40px;
   margin: 0;
-  padding: var(--space-8) var(--space-10);
+  padding: var(--space-6) var(--space-10);
   text-align: left;
   border: none;
   border-left: var(--border-accent-width) solid transparent;
@@ -527,10 +332,19 @@ button.menu-item[aria-current] {
   border-bottom: var(--border-width) solid var(--color-border-default);
 }
 
+/* One row, as tall as the menu's brand row, whether or not it has buttons (they sit
+   on the title's baseline). The session bar can grow a second row for an AI run. */
+.page-header:not(.session-bar) {
+  box-sizing: border-box;
+  height: calc(40px + 2 * var(--space-20) + var(--border-width));
+}
+
+/* A 40px line, the height of the actions beside it, so every page header (with or
+   without buttons) is as tall as the menu's brand row and their rules line up. */
 .page-header h1 {
   margin: 0;
   font-size: 22px;
-  line-height: 1.2;
+  line-height: 40px;
 }
 
 .page-actions {
@@ -686,7 +500,7 @@ ol.steps li[aria-current] {
 
 .launch-list {
   display: grid;
-  gap: var(--space-8);
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -696,18 +510,38 @@ ol.steps li[aria-current] {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  padding-bottom: var(--space-8);
+  padding: var(--space-6) 0;
   border-bottom: 1px dashed var(--color-border-default);
 }
 
+.launch-list li:first-child {
+  border-top: 1px dashed var(--color-border-default);
+}
+
+/* The project's name over its language; the whole block opens the project. */
 button.launch-row {
   flex: 1;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  justify-items: start;
+  gap: 0;
   min-width: 0;
+  padding: var(--space-6) var(--space-8);
   text-align: left;
   border-color: transparent;
   box-shadow: none;
+}
+
+button.launch-row > span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+button.launch-row > .muted {
+  font-size: 13px;
+}
+
+.dialog.dialog-wide {
+  width: min(760px, 100%);
 }
 
 .dialog button:focus-visible {
@@ -738,8 +572,9 @@ button.launch-row {
 }
 
 .session-title {
-  display: grid;
-  gap: var(--space-6);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-14);
   min-width: 0;
 }
 
@@ -750,6 +585,7 @@ button.launch-row {
 }
 
 .session-meta {
+  flex: none;
   margin: 0;
   font-size: 13px;
   letter-spacing: 0.06em;
@@ -787,7 +623,9 @@ button.icon-button {
 }
 
 .session-saved {
-  font-size: 13px;
+  min-width: 56px;
+  font-size: 15px;
+  text-align: center;
   opacity: 0.6;
 }
 
@@ -998,8 +836,8 @@ button.icon-button {
 .line-panel-meta {
   margin: 0;
   font-size: 13px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
 }
 
 /* Line panel: frame, editor and actions */
@@ -1011,6 +849,7 @@ button.icon-button {
 .line-frame {
   display: grid;
   place-items: center;
+  box-sizing: border-box;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: var(--color-shadow);
@@ -1181,9 +1020,26 @@ button.load-script {
 }
 
 /* Export dialog */
-.export-rules ul {
+/* Each part of the dialog sits under a dashed rule, like the menu's sections. */
+.export-rules,
+.export-location {
+  padding-top: var(--space-14);
+  border-top: 1px dashed var(--color-border-default);
+}
+
+.export-rules {
   display: grid;
   gap: var(--space-10);
+}
+
+.export-rules h3 {
+  margin: 0;
+  font-weight: 400;
+}
+
+.export-rules ul {
+  display: grid;
+  gap: var(--space-14);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1206,8 +1062,7 @@ button.load-script {
 
 .export-rule select {
   grid-column: 2;
-  grid-row: 1 / span 2;
-  height: 40px;
+  grid-row: 1;
 }
 
 .export-location {
@@ -1275,11 +1130,6 @@ button.load-script {
   display: grid;
   gap: var(--space-14);
   min-width: 0;
-}
-
-/* Keeps the shared "section + section" margin out of the gap-based layout. */
-.page-body section + section {
-  margin-top: 0;
 }
 
 .section-head {

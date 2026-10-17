@@ -439,7 +439,7 @@ function CpsField({
       <span id={hintId} className={!inheriting && !valid ? "field-error" : "hint"}>
         {!inheriting && !valid
           ? "Use a whole number from 1 to 60."
-          : "Reading speed that sets how long each line can be."}
+          : "Sets how long each line can be."}
       </span>
     </div>
   )

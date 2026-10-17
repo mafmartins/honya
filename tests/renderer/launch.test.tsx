@@ -43,7 +43,7 @@ describe("launch dialog", () => {
     expect(within(dialog).getByLabelText<HTMLSelectElement>("Portuguese").value).toBe("pt-br")
     const create = within(dialog).getByRole("button", { name: "Create" })
     expect((create as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.change(within(dialog).getByLabelText("Series name"), {
+    fireEvent.change(within(dialog).getByLabelText("Project name"), {
       target: { value: "Dandadan" },
     })
     fireEvent.click(create)
@@ -66,11 +66,11 @@ describe("launch dialog", () => {
     )
     const dialog = screen.getByRole("dialog")
     expect(screen.queryByRole("button", { name: "Continue session" })).toBeNull()
-    expect(document.activeElement).toBe(within(dialog).getByLabelText("Series name"))
+    expect(document.activeElement).toBe(within(dialog).getByLabelText("Project name"))
     const close = within(dialog).getByRole("button", { name: "Close" })
     close.focus()
     fireEvent.keyDown(close, { key: "Tab" })
-    expect(document.activeElement).toBe(within(dialog).getByLabelText("Series name"))
+    expect(document.activeElement).toBe(within(dialog).getByLabelText("Project name"))
     fireEvent.keyDown(document.activeElement ?? dialog, { key: "Tab", shiftKey: true })
     expect(document.activeElement).toBe(close)
     fireEvent.keyDown(dialog, { key: "Escape" })
@@ -150,7 +150,7 @@ describe("shell boot", () => {
     await ready(api)
     render(<Shell api={api} />)
     const dialog = await screen.findByRole("dialog", { name: "What are we working on?" })
-    fireEvent.change(within(dialog).getByLabelText("Series name"), {
+    fireEvent.change(within(dialog).getByLabelText("Project name"), {
       target: { value: "Dandadan" },
     })
     fireEvent.click(within(dialog).getByRole("button", { name: "Create" }))

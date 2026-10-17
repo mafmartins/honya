@@ -49,7 +49,7 @@ export function LaunchDialog({
   const current = info.continueSession
   const projects = [...info.projects].sort((left, right) => left.name.localeCompare(right.name))
   return (
-    <Dialog title="What are we working on?" onClose={onClose}>
+    <Dialog title="What are we working on?" onClose={onClose} wide>
       <ErrorLine message={error} />
       {current === null ? null : (
         <section className="tile tile-accent" aria-labelledby="launch-continue">
@@ -118,7 +118,7 @@ export function LaunchDialog({
             New project
           </h3>
           <label>
-            <span className="field-label">Series name</span>
+            <span className="field-label">Project name</span>
             <input
               value={name}
               onChange={(event) => {

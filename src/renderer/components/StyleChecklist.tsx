@@ -21,13 +21,13 @@ export function StyleChecklist(props: {
     setChoices((current) => new Map(current).set(name, choice))
   }
   return (
-    <div>
-      <ul className="styles">
+    <div className="style-checklist">
+      <ul className="style-list">
         {props.styles.map((style) => (
-          <li key={style.name}>
-            <span className="name">{style.name}</span>{" "}
+          <li key={style.name} className="style-row">
+            <span className="style-name">{style.name}</span>
             {(["dialogue", "skip"] as const).map((choice) => (
-              <label key={choice} className="picked">
+              <label key={choice} className="choice">
                 <input
                   type="radio"
                   name={`style-${style.name}`}
@@ -43,23 +43,25 @@ export function StyleChecklist(props: {
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        className="action"
-        disabled={!ready}
-        onClick={() => {
-          props.onConfirm(
-            [...choices].filter(([, choice]) => choice === "dialogue").map(([name]) => name),
-          )
-        }}
-      >
-        {props.confirmLabel ?? "Import"}
-      </button>
-      {props.onCancel === undefined ? null : (
-        <button type="button" onClick={props.onCancel}>
-          Cancel
+      <div className="style-actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={!ready}
+          onClick={() => {
+            props.onConfirm(
+              [...choices].filter(([, choice]) => choice === "dialogue").map(([name]) => name),
+            )
+          }}
+        >
+          {props.confirmLabel ?? "Import"}
         </button>
-      )}
+        {props.onCancel === undefined ? null : (
+          <button type="button" onClick={props.onCancel}>
+            Cancel
+          </button>
+        )}
+      </div>
     </div>
   )
 }

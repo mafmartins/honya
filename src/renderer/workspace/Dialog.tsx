@@ -8,10 +8,13 @@ export function Dialog({
   title,
   children,
   onClose,
+  wide = false,
 }: {
   title: string
   children: ReactNode
   onClose?: () => void
+  // For dialogs with two columns, such as the launch window.
+  wide?: boolean
 }): React.JSX.Element {
   const titleId = useId()
   const card = useRef<HTMLDivElement>(null)
@@ -52,7 +55,13 @@ export function Dialog({
 
   return (
     <div className="dialog-backdrop" onKeyDown={onKeyDown}>
-      <div ref={card} className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div
+        ref={card}
+        className={wide ? "dialog dialog-wide" : "dialog"}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <h2 id={titleId} className="dialog-title">
           {title}
         </h2>

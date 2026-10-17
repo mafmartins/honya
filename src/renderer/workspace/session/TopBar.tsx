@@ -39,8 +39,7 @@ export function TopBar({
   onOptions: (patch: { provider?: ProviderId; preset?: Preset }) => void
   onAttachVideo: () => void
   onDetachVideo: () => void
-  // Absent until the export dialog exists.
-  onExport?: () => void
+  onExport: () => void
   onRun: () => void
   onStop: () => void
 }): React.JSX.Element {
@@ -108,7 +107,7 @@ export function TopBar({
         <span className="session-saved" role="status">
           {saving ? "Saving…" : "Saved"}
         </span>
-        <button type="button" disabled={onExport === undefined} onClick={onExport}>
+        <button type="button" disabled={view.lines.length === 0} onClick={onExport}>
           Export…
         </button>
         {running ? null : untranslated === 0 ? null : (

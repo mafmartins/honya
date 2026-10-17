@@ -6,6 +6,7 @@ import { StyleChecklist } from "../../components/StyleChecklist"
 import { PageHeader } from "../PageHeader"
 import { Filters, filterLines, type LineFilter } from "./Filters"
 import { LineList } from "./LineList"
+import { ExportDialog } from "./ExportDialog"
 import { LinePanel } from "./LinePanel"
 import { TopBar } from "./TopBar"
 import {
@@ -45,6 +46,7 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
   const [stopping, setStopping] = useState(false)
   const [filter, setFilter] = useState<LineFilter>("all")
   const [search, setSearch] = useState("")
+  const [exporting, setExporting] = useState(false)
   const [chosen, setChosen] = useState<number | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLElement>(null)
@@ -121,6 +123,9 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
               replace(await api.detachVideo(id))
             })
           }}
+          onExport={() => {
+            setExporting(true)
+          }}
           onRun={runAi}
           onStop={() => {
             setStopping(true)
@@ -162,6 +167,17 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
             )}
           </aside>
         </div>
+        {exporting ? (
+          <ExportDialog
+            sessionId={id}
+            owner={{ kind: "project", id: view.projectId }}
+            styleOwner={{ kind: "style", variant: view.variant }}
+            onClose={() => {
+              setExporting(false)
+              listRef.current?.focus()
+            }}
+          />
+        ) : null}
       </section>
     </SaveStatusContext.Provider>
   )

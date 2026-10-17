@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { defaultModels } from "../../src/core/providers/models"
-import { addSpend, costOf } from "../../src/core/providers/prices"
+import { addSpend, costOf, DEFAULT_EUR_RATE, toEuros } from "../../src/core/providers/prices"
 
 describe("cost", () => {
   it("knows a price for every default model except mistral small", () => {
@@ -51,5 +51,12 @@ describe("cost", () => {
       { model: "m", requests: 2, input: 15, output: 3, cached: 1 },
       { model: "n", requests: 1, input: 1, output: 1, cached: 0 },
     ])
+  })
+})
+
+describe("euros", () => {
+  it("converts dollars rounded to four decimals", () => {
+    expect(toEuros(0.0708, 0.86)).toBe(0.0609)
+    expect(DEFAULT_EUR_RATE).toBe(0.86)
   })
 })

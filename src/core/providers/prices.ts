@@ -74,3 +74,10 @@ export function addSpend(spend: readonly ModelSpend[], model: string, usage: Usa
       : entry,
   )
 }
+
+// Used until the translator sets their own rate in Settings.
+export const DEFAULT_EUR_RATE = 0.86
+
+export function toEuros(usd: number, rate: number): number {
+  return Math.round(usd * rate * 1e4) / 1e4
+}

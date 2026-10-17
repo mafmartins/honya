@@ -18,8 +18,15 @@ const SCRIPT = [
   "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello there.",
 ].join("\n")
 
-function setup(sessions: Record<string, number> = {}) {
-  const store = createFileStore(mkdtempSync(join(tmpdir(), "honya-projects-")))
+function setup(sessions: Record<string, number> = {}, failSaveIn: string | null = null) {
+  const files = createFileStore(mkdtempSync(join(tmpdir(), "honya-projects-")))
+  const store: typeof files = {
+    ...files,
+    saveSeries: (series) => {
+      if (series.variant === failSaveIn) throw new Error("disk full")
+      files.saveSeries(series)
+    },
+  }
   let n = 0
   const settings = createSettingsStore({ read: () => null, write: () => {} })
   const service = createProjectService(
@@ -28,7 +35,7 @@ function setup(sessions: Record<string, number> = {}) {
     () => settings.get(),
     () => `p${String(++n)}`,
   )
-  return { store, service }
+  return { store, service, settings }
 }
 
 describe("project service", () => {
@@ -70,6 +77,13 @@ describe("project service", () => {
     expect(moved.summary.variant).toBe("pt-br")
     expect(service.getStyle("pt-br").usedBy).toEqual(["B"])
     expect(service.getStyle("pt-pt").usedBy).toEqual(["A"])
+  })
+
+  it("keeps the project where it was when moving it to the other language fails", () => {
+    const { service } = setup({}, "pt-br")
+    const p = service.createProject("A", "pt-pt")
+    expect(() => service.updateProject(p.id, { variant: "pt-br" })).toThrow("disk full")
+    expect(service.getProject(p.id).summary.variant).toBe("pt-pt")
   })
 
   it("stores project settings and clears the characters-per-second override", () => {

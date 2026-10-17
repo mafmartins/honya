@@ -207,9 +207,6 @@ export function createProjectService(
       if (patch.frameSetting !== undefined) {
         next.frameSetting = patch.frameSetting
       }
-      if (next.variant !== current.variant) {
-        store.deleteSeries(current.variant, id)
-      }
       const settingsChanged =
         patch.cpsLimit !== undefined ||
         patch.preset !== undefined ||
@@ -218,6 +215,10 @@ export function createProjectService(
         saveSeries(next)
       } else {
         store.saveSeries(next)
+      }
+      // The old file goes only once the new one is saved, so a failed move loses nothing.
+      if (next.variant !== current.variant) {
+        store.deleteSeries(current.variant, id)
       }
       return view(next)
     },

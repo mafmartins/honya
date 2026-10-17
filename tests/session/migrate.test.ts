@@ -86,6 +86,26 @@ describe("migrateV2", () => {
     expect(session.spend).toEqual([])
   })
 
+  it("leaves failed lines and emptied edits untranslated", () => {
+    const session = migrateV2(
+      v2({
+        saved: {
+          ...(v2().saved as object),
+          results: [
+            ["0", { id: "0", words: "Damn it! {note: tradução falhou}", mark: "doubt" }],
+            ["1", { id: "1", words: "Olá. {note: odd}", mark: "doubt" }],
+          ],
+        },
+        review: { edits: { "1": "  " }, accepted: [], rules: [] },
+      }),
+    )
+    if (typeof session === "string") throw new Error(session)
+    for (const line of session.lines.slice(0, 2)) {
+      expect(line).toMatchObject({ words: null, origin: null, flag: null })
+    }
+    expect(session.edits).toEqual([])
+  })
+
   it("refuses a file that isn't a v2 session and says why", () => {
     expect(migrateV2({})).toBe("not a version 2 session")
     expect(migrateV2(v2({ saved: undefined }))).toContain("saved")

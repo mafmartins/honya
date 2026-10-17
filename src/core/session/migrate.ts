@@ -9,6 +9,8 @@ const PROVIDERS: readonly ProviderId[] = ["claude", "gpt", "gemini", "mistral"]
 const PRESETS: readonly Preset[] = ["save", "balanced", "best"]
 const FRAME_SETTINGS: readonly FrameSetting[] = ["none", "marked", "every"]
 const NOTE = /\s*\{note: ([^}]*)\}$/
+// v2 kept the English with this note when a line couldn't be translated.
+const FAILED_NOTE = "tradução falhou"
 
 function isOneOf<T extends string>(value: unknown, options: readonly T[]): value is T {
   return typeof value === "string" && options.some((option) => option === value)
@@ -106,6 +108,7 @@ export function migrateV2(value: unknown): WorkSession | string {
     const line = byIndex.get(Number(entry[0]))
     if (line === undefined || typeof text !== "string") continue
     const { words, flag } = splitNote(text)
+    if (flag === FAILED_NOTE) continue
     line.words = words
     line.origin = "ai"
     line.aiDraft = words
@@ -121,6 +124,13 @@ export function migrateV2(value: unknown): WorkSession | string {
     const line = byIndex.get(Number(key))
     const cue = cues.find((item) => item.index === Number(key))
     if (line === undefined || cue === undefined || typeof final !== "string") continue
+    // An emptied line is untranslated, as clearing a line is now.
+    if (final.trim() === "") {
+      line.words = null
+      line.origin = null
+      line.flag = null
+      continue
+    }
     edits.push({ index: line.index, en: cue.visible, draft: line.aiDraft, final })
     if (line.flag !== null) line.resolution = "edited"
     line.words = final

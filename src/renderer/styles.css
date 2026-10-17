@@ -554,3 +554,159 @@ textarea:focus-visible {
   outline: 2px solid var(--color-border-accent);
   outline-offset: 2px;
 }
+
+/* Dialogs: setup and launch window */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-20);
+  background: rgb(42 36 32 / 35%);
+}
+
+.dialog {
+  position: relative;
+  display: grid;
+  gap: var(--space-14);
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--space-28);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  box-shadow: var(--shadow-stamp) var(--color-shadow);
+}
+
+.dialog-title {
+  margin: 0;
+  padding-right: var(--space-32);
+  font-size: 27px;
+  line-height: 1.2;
+}
+
+button.dialog-close {
+  position: absolute;
+  top: var(--space-14);
+  right: var(--space-14);
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+}
+
+.dialog label {
+  margin: 0;
+}
+
+.dialog button {
+  margin: 0;
+}
+
+.dialog-fields {
+  display: grid;
+  gap: var(--space-14);
+}
+
+.field-label {
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dialog-test,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-14);
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+}
+
+.test-ok {
+  color: #2f7a3b;
+}
+
+.test-failed {
+  color: var(--color-text-accent);
+}
+
+button.primary {
+  color: var(--color-text-accent);
+}
+
+ol.steps {
+  display: flex;
+  gap: var(--space-14);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+ol.steps li[aria-current] {
+  color: var(--color-text-accent);
+  font-weight: 600;
+}
+
+.tile {
+  display: grid;
+  align-content: start;
+  gap: var(--space-10);
+  padding: var(--space-14);
+  border: var(--border-width) solid var(--color-border-default);
+}
+
+.tile p {
+  margin: 0;
+}
+
+.tile-accent {
+  border-color: var(--color-border-accent);
+}
+
+.tile-label {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.launch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-14);
+}
+
+.launch-list {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.launch-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding-bottom: var(--space-8);
+  border-bottom: 1px dashed var(--color-border-default);
+}
+
+button.launch-row {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  min-width: 0;
+  text-align: left;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.dialog button:focus-visible {
+  outline: 2px solid var(--color-border-accent);
+  outline-offset: 2px;
+}

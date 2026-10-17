@@ -1,0 +1,240 @@
+import { useEffect, useRef, useState } from "react"
+import {
+  PRESETS,
+  PROVIDERS,
+  VARIANTS,
+  type FrameSetting,
+  type Preset,
+  type ProviderId,
+  type Variant,
+} from "../../shared/api"
+import { useApi } from "../api"
+import { Dialog } from "./Dialog"
+import { providerName, VARIANT_LABEL } from "./labels"
+
+const PRESET_LABEL: Record<Preset, string> = {
+  save: "Save — cheapest",
+  balanced: "Balanced",
+  best: "Best — highest quality",
+}
+const FRAMES: readonly FrameSetting[] = ["none", "marked", "every"]
+const FRAME_LABEL: Record<FrameSetting, string> = {
+  none: "No frames",
+  marked: "Only lines that need one",
+  every: "Every line",
+}
+
+type Test =
+  { state: "idle" } | { state: "testing" } | { state: "ok" } | { state: "failed"; message: string }
+
+// First-time setup: step 1 a provider and a tested key, step 2 the defaults for new projects.
+export function SetupDialog({ onDone }: { onDone: () => void }): React.JSX.Element {
+  const api = useApi()
+  const [step, setStep] = useState<1 | 2>(1)
+  const [provider, setProvider] = useState<ProviderId>("claude")
+  const [key, setKey] = useState("")
+  const [test, setTest] = useState<Test>({ state: "idle" })
+  const [variant, setVariant] = useState<Variant>("pt-pt")
+  const [preset, setPreset] = useState<Preset>("save")
+  const [frameSetting, setFrameSetting] = useState<FrameSetting>("none")
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const firstField = useRef<HTMLSelectElement>(null)
+  useEffect(() => {
+    firstField.current?.focus()
+  }, [step])
+
+  const runTest = (): void => {
+    setTest({ state: "testing" })
+    setFailure(null)
+    api.testKey(provider, key).then(
+      (result) => {
+        setTest(result.ok ? { state: "ok" } : { state: "failed", message: result.message })
+      },
+      (error: unknown) => {
+        setTest({
+          state: "failed",
+          message: error instanceof Error ? error.message : "Something went wrong.",
+        })
+      },
+    )
+  }
+  const attempt = (task: () => Promise<void>): void => {
+    setBusy(true)
+    setFailure(null)
+    task().then(
+      () => {
+        setBusy(false)
+      },
+      (error: unknown) => {
+        setBusy(false)
+        setFailure(error instanceof Error ? error.message : "Something went wrong.")
+      },
+    )
+  }
+
+  return (
+    <Dialog title="Welcome to Honya">
+      <ol className="steps" aria-label="Steps">
+        <li aria-current={step === 1 ? "step" : undefined}>1 Provider</li>
+        <li aria-current={step === 2 ? "step" : undefined}>2 Defaults</li>
+      </ol>
+      {step === 1 ? (
+        <div className="dialog-fields">
+          <label>
+            <span className="field-label">Provider</span>
+            <select
+              ref={firstField}
+              value={provider}
+              onChange={(event) => {
+                const next = PROVIDERS.find((item) => item === event.target.value)
+                if (next !== undefined) {
+                  setProvider(next)
+                  setTest({ state: "idle" })
+                }
+              }}
+            >
+              {PROVIDERS.map((item) => (
+                <option key={item} value={item}>
+                  {providerName(item)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Key</span>
+            <input
+              type="password"
+              autoComplete="off"
+              value={key}
+              onChange={(event) => {
+                setKey(event.target.value)
+                setTest({ state: "idle" })
+              }}
+            />
+          </label>
+          <div className="dialog-test">
+            <button
+              type="button"
+              disabled={key.trim() === "" || test.state === "testing"}
+              onClick={runTest}
+            >
+              Test the key
+            </button>
+            {test.state === "ok" ? (
+              <span className="test-ok">{`✓ ${providerName(provider)} answered`}</span>
+            ) : null}
+            {test.state === "failed" ? (
+              <span className="test-failed" role="alert">
+                {test.message}
+              </span>
+            ) : null}
+          </div>
+          {failure === null ? null : (
+            <p className="error-line" role="alert">
+              {failure}
+            </p>
+          )}
+          <div className="dialog-actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={test.state !== "ok" || busy}
+              onClick={() => {
+                attempt(async () => {
+                  await api.setKey(provider, key)
+                  await api.updateSettings({ defaultProvider: provider })
+                  setStep(2)
+                })
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="dialog-fields">
+          <p className="muted">Defaults for new projects. You can change them later in Settings.</p>
+          <label>
+            <span className="field-label">Portuguese</span>
+            <select
+              ref={firstField}
+              value={variant}
+              onChange={(event) => {
+                setVariant(VARIANTS.find((item) => item === event.target.value) ?? variant)
+              }}
+            >
+              {VARIANTS.map((item) => (
+                <option key={item} value={item}>
+                  {VARIANT_LABEL[item]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Quality</span>
+            <select
+              value={preset}
+              onChange={(event) => {
+                setPreset(PRESETS.find((item) => item === event.target.value) ?? preset)
+              }}
+            >
+              {PRESETS.map((item) => (
+                <option key={item} value={item}>
+                  {PRESET_LABEL[item]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Video frames</span>
+            <select
+              value={frameSetting}
+              onChange={(event) => {
+                setFrameSetting(FRAMES.find((item) => item === event.target.value) ?? frameSetting)
+              }}
+            >
+              {FRAMES.map((item) => (
+                <option key={item} value={item}>
+                  {FRAME_LABEL[item]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {failure === null ? null : (
+            <p className="error-line" role="alert">
+              {failure}
+            </p>
+          )}
+          <div className="dialog-actions">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setStep(1)
+              }}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={busy}
+              onClick={() => {
+                attempt(async () => {
+                  await api.updateSettings({
+                    defaults: { variant, preset, frameSetting },
+                    setupDone: true,
+                  })
+                  onDone()
+                })
+              }}
+            >
+              Finish
+            </button>
+          </div>
+        </div>
+      )}
+    </Dialog>
+  )
+}

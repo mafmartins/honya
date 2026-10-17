@@ -21,9 +21,16 @@ async function withSession(api: FakeApi): Promise<{ projectId: string; sessionId
   return { projectId: project.id, sessionId }
 }
 
+// Boots past setup and closes the launch window, leaving the bare workspace.
+async function renderShell(api: FakeApi): Promise<void> {
+  await api.updateSettings({ setupDone: true })
+  render(<Shell api={api} />)
+  fireEvent.click(await screen.findByRole("button", { name: "Close" }))
+}
+
 describe("workspace shell", () => {
   it("shows the menu and switches pages", async () => {
-    render(<Shell api={fakeApi()} />)
+    await renderShell(fakeApi())
     const nav = menu()
     expect(within(nav).getByText("Honya")).toBeTruthy()
     expect(within(nav).getByRole("combobox", { name: "Project" })).toBeTruthy()
@@ -53,7 +60,7 @@ describe("workspace shell", () => {
   it("lists projects in the switcher and opens Projects from Manage projects", async () => {
     const api = fakeApi()
     const project = await api.createProject("Frieren", "pt-br")
-    render(<Shell api={api} />)
+    await renderShell(api)
     const select = within(menu()).getByRole("combobox", { name: "Project" })
     expect(await within(select).findByRole("option", { name: "Frieren" })).toBeTruthy()
     fireEvent.change(select, { target: { value: project.id } })
@@ -68,7 +75,7 @@ describe("workspace shell", () => {
   it("opens a recent session and shows its summary, refreshed by AI events", async () => {
     const api = fakeApi()
     const { projectId, sessionId } = await withSession(api)
-    render(<Shell api={api} />)
+    await renderShell(api)
     const nav = menu()
     expect(within(nav).queryByRole("heading", { name: "This session" })).toBeNull()
     fireEvent.click(await within(nav).findByRole("button", { name: /ep01\.ass/ }))

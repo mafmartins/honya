@@ -12,7 +12,9 @@ export interface MenuProps {
   projectId: string | null
   sessionId: string | null
   onNavigate: (route: Route) => void
+  // Sets the project without opening a session (used by recent sessions).
   onSwitchProject: (id: string) => void
+  onOpenProject: (id: string) => void
 }
 
 // The left menu: name, project switcher, navigation, recent sessions and a summary
@@ -23,6 +25,7 @@ export function Menu({
   sessionId,
   onNavigate,
   onSwitchProject,
+  onOpenProject,
 }: MenuProps): React.JSX.Element {
   const api = useApi()
   const report = useReport()
@@ -84,7 +87,7 @@ export function Menu({
             if (value === MANAGE) {
               onNavigate({ page: "projects" })
             } else if (value !== "") {
-              onSwitchProject(value)
+              onOpenProject(value)
             }
           }}
         >

@@ -35,6 +35,43 @@ const CARD: StyleCard = {
   rules: [],
 }
 
+function v2Session(id: string) {
+  return {
+    version: 2,
+    id,
+    startedAt: "2025-05-05T00:00:00.000Z",
+    phase: "review",
+    scriptPath: "/x/old.ass",
+    scriptName: "old.ass",
+    scriptText: SCRIPT,
+    seriesId: "p9",
+    seriesName: "Old",
+    variant: "pt-pt",
+    provider: "claude",
+    preset: "save",
+    frameSetting: "none",
+    videoPath: null,
+    outputPath: "",
+    dialogueStyles: ["Default"],
+    dialogueLines: 2,
+    totalBatches: 1,
+    saved: {
+      completedBatches: 1,
+      results: [["0", { id: "0", words: "Olá.", mark: "clean" }]],
+      glossary: [],
+      brief: "",
+      hardIds: [],
+      frameIds: [],
+      strongIds: [],
+    },
+    review: { edits: {}, accepted: [], rules: [] },
+    frameNotes: [],
+    framesUsed: 0,
+    elapsedMs: 5,
+    error: null,
+  }
+}
+
 function setup(failWrites = { on: false }) {
   const dir = mkdtempSync(join(tmpdir(), "honya-sessions-"))
   const files = new Map<string, string>()
@@ -175,7 +212,9 @@ describe("work sessions", () => {
     store.writeFrame(id, "3", new Uint8Array([1, 2]))
     expect(Array.from(store.readFrame(id, "3") ?? [])).toEqual([1, 2])
     expect(() => store.readFrame(id, "../x")).toThrow()
-    expect(() => { store.clearFrames(".."); }).toThrow()
+    expect(() => {
+      store.clearFrames("..")
+    }).toThrow()
     store.clearFrames(id)
     expect(store.readFrame(id, "3")).toBeNull()
   })
@@ -183,40 +222,7 @@ describe("work sessions", () => {
   it("migrates v2 files, keeps originals and skips damaged ones", () => {
     const { store, dir } = setup()
     const id = "11111111-1111-4111-8111-111111111111"
-    const v2 = {
-      version: 2,
-      id,
-      startedAt: "2025-05-05T00:00:00.000Z",
-      phase: "review",
-      scriptPath: "/x/old.ass",
-      scriptName: "old.ass",
-      scriptText: SCRIPT,
-      seriesId: "p9",
-      seriesName: "Old",
-      variant: "pt-pt",
-      provider: "claude",
-      preset: "save",
-      frameSetting: "none",
-      videoPath: null,
-      outputPath: "",
-      dialogueStyles: ["Default"],
-      dialogueLines: 2,
-      totalBatches: 1,
-      saved: {
-        completedBatches: 1,
-        results: [["0", { id: "0", words: "Olá.", mark: "clean" }]],
-        glossary: [],
-        brief: "",
-        hardIds: [],
-        frameIds: [],
-        strongIds: [],
-      },
-      review: { edits: {}, accepted: [], rules: [] },
-      frameNotes: [],
-      framesUsed: 0,
-      elapsedMs: 5,
-      error: null,
-    }
+    const v2 = v2Session(id)
     writeFileSync(join(dir, `${id}.json`), JSON.stringify(v2))
     const bad = "22222222-2222-4222-8222-222222222222"
     writeFileSync(join(dir, `${bad}.json`), "{nope")
@@ -236,13 +242,14 @@ describe("work sessions", () => {
     const failWrites = { on: false }
     const { store, dir } = setup(failWrites)
     const id = "33333333-3333-4333-8333-333333333333"
-    const original = JSON.stringify({ version: 2, id })
+    const original = JSON.stringify(v2Session(id))
     writeFileSync(join(dir, `${id}.json`), original)
     failWrites.on = true
     const result = store.migrate()
     expect(result.migrated).toBe(0)
     expect(result.skipped).toHaveLength(1)
     expect(readFileSync(join(dir, `${id}.json`), "utf8")).toBe(original)
+    expect(result.skipped[0]).toMatch(new RegExp(`^${id}\\.json: disk full`))
     expect(readdirSync(dir)).toEqual([`${id}.json`])
   })
 

@@ -298,16 +298,18 @@ export function createWorkSessions(
         }
         const backup = join(dir, `${result.id}.v2.json`)
         let temp: string | null = null
+        let createdBackup = false
         try {
           temp = writeAtomic(path, result)
           // The backup comes first and the swap is one atomic rename, so <id>.json is
           // always either the old or the new content.
+          createdBackup = !existsSync(backup)
           copyFileSync(path, backup)
           renameSync(temp, path)
           migrated += 1
         } catch (error) {
           if (temp !== null) rmSync(temp, { force: true })
-          rmSync(backup, { force: true })
+          if (createdBackup) rmSync(backup, { force: true })
           skipped.push(`${file}: ${error instanceof Error ? error.message : "could not be saved"}`)
         }
       }

@@ -16,7 +16,7 @@ import { readAss, type DialogueCue } from "../../core/ass/script"
 import { isRecord } from "../../core/library/guards"
 import type { FrameSetting, StyleCard, Variant } from "../../core/library/types"
 import type { Preset, ProviderId } from "../../core/pipeline/types"
-import { acceptLine, editLine, emptyLines, isFinished } from "../../core/session/lines"
+import { acceptLine, addActivity, editLine, emptyLines, isFinished } from "../../core/session/lines"
 import { migrateV2 } from "../../core/session/migrate"
 import { sessionStats, type SessionStats } from "../../core/session/stats"
 import type { LineOrigin, WorkSession } from "../../core/session/types"
@@ -412,14 +412,14 @@ export function createWorkSessions(
     edit(id, index, words) {
       const session = get(id)
       lineView(session, index)
-      const next = editLine(session, index, words)
+      const next = addActivity(editLine(session, index, words), deps.now())
       save(next)
       return lineView(next, index)
     },
     accept(id, index) {
       const session = get(id)
       lineView(session, index)
-      const next = acceptLine(session, index)
+      const next = addActivity(acceptLine(session, index), deps.now())
       save(next)
       return lineView(next, index)
     },

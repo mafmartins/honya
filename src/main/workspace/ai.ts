@@ -12,6 +12,7 @@ import type { ProviderId, Usage } from "../../core/pipeline/types"
 import { type ProviderError, providerName } from "../../core/providers/errors"
 import { addSpend } from "../../core/providers/prices"
 import {
+  addActivity,
   applyAiLines,
   applyRetranslation,
   untranslatedIndexes,
@@ -431,11 +432,10 @@ export function createAiService(deps: AiServiceDeps): AiService {
       } finally {
         const answer = result
         saved = update(sessionId, (fresh) => {
-          const now = fresh.lines.find((line) => line.index === index)?.words ?? null
-          keptEdit = answer !== null && now !== asked
-          return answer === null || keptEdit
-            ? flush(fresh)
-            : applyRetranslation(flush(fresh), answer)
+          const current = fresh.lines.find((line) => line.index === index)?.words ?? null
+          keptEdit = answer !== null && current !== asked
+          const spent = addActivity(flush(fresh), now())
+          return answer === null || keptEdit ? spent : applyRetranslation(spent, answer)
         })
       }
       if (result === null) {

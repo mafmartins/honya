@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   acceptLine,
+  addActivity,
   applyAiLines,
   applyRetranslation,
   editLine,
@@ -18,6 +19,14 @@ function withLine(session: WorkSession, index: number, patch: Partial<SessionLin
 }
 
 describe("session lines", () => {
+  it("adds the time since the last activity, at most two minutes", () => {
+    const session = { ...makeSession(), updatedAt: "2026-10-17T10:00:00.000Z", activeMs: 500 }
+    const at = Date.parse("2026-10-17T10:00:30.000Z")
+    expect(addActivity(session, at).activeMs).toBe(30_500)
+    expect(addActivity(session, at + 600_000).activeMs).toBe(120_500)
+    expect(addActivity(session, at - 60_000).activeMs).toBe(500)
+  })
+
   it("editing makes a line manual, resolves its flag and records the correction", () => {
     const flagged = withLine(makeSession(), 0, {
       words: "Droga!",

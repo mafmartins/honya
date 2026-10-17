@@ -345,6 +345,19 @@ describe("work sessions", () => {
     )
   })
 
+  it("counts the time spent editing and accepting as active time", () => {
+    const { store, files } = setup()
+    files.set("/x/ep1.ass", SCRIPT)
+    const id = store.create("p1")
+    store.loadScript(id, "/x/ep1.ass")
+    expect(store.get(id).activeMs).toBe(0)
+    store.edit(id, 0, "Olá.")
+    const edited = store.get(id).activeMs
+    expect(edited).toBeGreaterThan(0)
+    store.accept(id, 1)
+    expect(store.get(id).activeMs).toBeGreaterThan(edited)
+  })
+
   it("maps chosen lines of a session to line views and hands out the project card", () => {
     const { store, files } = setup()
     files.set("/x/ep1.ass", SCRIPT)

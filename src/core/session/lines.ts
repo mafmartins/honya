@@ -1,6 +1,17 @@
 import { readAss, type DialogueCue } from "../ass/script"
 import type { LineEdit, SessionLine, WorkSession } from "./types"
 
+// A gap longer than this between two actions on a session counts as a break.
+export const ACTIVITY_CAP_MS = 120_000
+
+// Adds the time since the session was last saved to its active time, capped, for an
+// action the translator took (an edit, Accept, Ask AI again).
+export function addActivity(session: WorkSession, at: number): WorkSession {
+  const since = at - Date.parse(session.updatedAt)
+  const elapsed = Number.isFinite(since) ? Math.min(Math.max(0, since), ACTIVITY_CAP_MS) : 0
+  return { ...session, activeMs: session.activeMs + elapsed }
+}
+
 export interface AiLine {
   index: number
   words: string

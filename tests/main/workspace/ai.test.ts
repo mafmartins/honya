@@ -296,6 +296,7 @@ describe("AI service", () => {
     expect(requests[0]?.prompt).toContain("mais curto")
     const saved = sessions.get(ID)
     expect(saved.lines[1]).toMatchObject({ words: "pt 1", retranslated: 1 })
+    expect(saved.activeMs).toBeGreaterThan(0)
     expect(saved.spend[0]?.requests).toBe(1)
   })
 

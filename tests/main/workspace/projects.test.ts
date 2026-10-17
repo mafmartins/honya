@@ -28,7 +28,13 @@ function setup(sessions: Record<string, number> = {}, failSaveIn: string | null 
     },
   }
   let n = 0
-  const settings = createSettingsStore({ read: () => null, write: () => {} })
+  let saved: string | null = null
+  const settings = createSettingsStore({
+    read: () => saved,
+    write: (text) => {
+      saved = text
+    },
+  })
   const service = createProjectService(
     store,
     (id) => ({ count: sessions[id] ?? 0, last: sessions[id] ? "2026-01-01" : null }),
@@ -84,6 +90,18 @@ describe("project service", () => {
     const p = service.createProject("A", "pt-pt")
     expect(() => service.updateProject(p.id, { variant: "pt-br" })).toThrow("disk full")
     expect(service.getProject(p.id).summary.variant).toBe("pt-pt")
+  })
+
+  it("keeps the defaults a project was created with when Settings change later", () => {
+    const { service, settings, store } = setup()
+    settings.update({ defaults: { variant: "pt-pt", preset: "balanced", frameSetting: "marked" } })
+    const p = service.createProject("A", "pt-pt")
+    expect(store.loadSeries("pt-pt", p.id)).toMatchObject({
+      preset: "balanced",
+      frameSetting: "marked",
+    })
+    settings.update({ defaults: { variant: "pt-pt", preset: "best", frameSetting: "every" } })
+    expect(service.getProject(p.id)).toMatchObject({ preset: "balanced", frameSetting: "marked" })
   })
 
   it("stores project settings and clears the characters-per-second override", () => {

@@ -456,8 +456,8 @@ function fakeWorkspace(keys: Set<ProviderId>): {
           variant,
           rules: [],
           cpsLimit: null,
-          preset: null,
-          frameSetting: null,
+          preset: settings.defaults.preset,
+          frameSetting: settings.defaults.frameSetting,
           references: [],
         }
         projects.set(item.id, item)

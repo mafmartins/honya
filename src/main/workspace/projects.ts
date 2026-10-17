@@ -174,12 +174,17 @@ export function createProjectService(
     },
     getProject: (id) => view(find(id)),
     getStyle: styleView,
+    // The project keeps the defaults it was made with: changing Settings later
+    // doesn't change existing projects.
     createProject(name, variant) {
+      const { defaults } = settings()
       const series: SeriesProfile = {
         id: newId(),
         variant,
         name: checkName(variant, name, null),
         rules: [],
+        preset: defaults.preset,
+        frameSetting: defaults.frameSetting,
       }
       store.saveSeries(series)
       return summary(series)

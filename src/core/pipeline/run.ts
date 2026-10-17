@@ -1,4 +1,4 @@
-import { charactersPerSecond, exceedsLimit } from "../ass/fit"
+import { tooLong } from "../ass/fit"
 import { appendNote } from "../ass/notes"
 import { readAss, type DialogueCue } from "../ass/script"
 import { applyTranslations } from "../ass/write"
@@ -390,7 +390,7 @@ function noteReason(line: LineResult): string {
 }
 
 function lineUnfit(words: string, cue: DialogueCue, cpsLimit: number): boolean {
-  return exceedsLimit(charactersPerSecond(words, cue.startMs, cue.endMs), cpsLimit)
+  return tooLong(words, cue.visible, cue.startMs, cue.endMs, cpsLimit)
 }
 
 function englishFailure(cue: DialogueCue): LineResult {

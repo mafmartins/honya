@@ -1,5 +1,5 @@
 import { readAss } from "../ass/script"
-import { charactersPerSecond, exceedsLimit } from "../ass/fit"
+import { tooLong } from "../ass/fit"
 import type { LineResult } from "./types"
 
 const FAILED_REASON = "tradução falhou"
@@ -44,7 +44,7 @@ export function buildReport(input: {
   ).length
   const overLimit = dialogue.filter((cue) => {
     const words = input.finalWords.get(cue.index) ?? cue.visible
-    return exceedsLimit(charactersPerSecond(words, cue.startMs, cue.endMs), input.cpsLimit)
+    return tooLong(words, cue.visible, cue.startMs, cue.endMs, input.cpsLimit)
   }).length
   const edited = new Set(input.edited)
   const editedFlags = input.flagged.filter((index) => edited.has(index)).length

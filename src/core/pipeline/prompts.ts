@@ -1,3 +1,4 @@
+import { charLimit } from "../ass/fit"
 import type { DialogueCue } from "../ass/script"
 import type { Rule, StyleCard, Variant } from "../library/types"
 import type { Term } from "./replies"
@@ -52,7 +53,7 @@ export function translatorSystem(card: StyleCard, brief: string): string {
       `Write natural, spoken ${language} that a native viewer expects from a good subtitle: idiomatic, not word for word.`,
       "Keep the meaning, tone, register and humour, and each speaker's way of talking.",
       "Use the speaker names to get gender agreement and forms of address right.",
-      "Each line has a character budget (the most a viewer can read in the time it is on screen). Stay within it; condense rather than overflow, without losing meaning.",
+      "Each line has a character budget: what a viewer can read in the time it is on screen, or the English line's own length if that is longer. Stay within it; condense rather than overflow, without losing meaning.",
       "Keep names as in the source. Use \\N for a line break only where the source has one; never more than two lines.",
     ].join("\n"),
     CONVENTIONS[card.variant],
@@ -160,8 +161,7 @@ function oneLine(text: string): string {
 }
 
 export function charBudget(cue: DialogueCue, cpsLimit: number): number {
-  const seconds = Math.max(0, cue.endMs - cue.startMs) / 1000
-  return Math.max(1, Math.floor(seconds * cpsLimit))
+  return charLimit(cue.visible, cue.startMs, cue.endMs, cpsLimit)
 }
 
 function ruleLine(rule: Rule): string {

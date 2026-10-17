@@ -26,7 +26,8 @@ describe("buildReport", () => {
       finalWords: new Map([
         [0, "Ok."],
         [1, "Hello there."],
-        [2, "abcdefghij".repeat(6)],
+        // Over the reading speed and longer than the English, so over the limit.
+        [2, "abcdefghij".repeat(7)],
         [3, "See you soon."],
       ]),
       results,

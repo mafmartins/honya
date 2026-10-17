@@ -37,6 +37,7 @@ function setup(
   const written: { path: string; text: string }[] = []
   const corrections: Correction[][] = []
   const rules: { owner: Owner; rule: Rule }[] = []
+  const known: Rule[] = []
   const service = createExportService({
     sessions: {
       get: () => stored,
@@ -50,7 +51,7 @@ function setup(
         ? Promise.resolve({ ...reply, spent: SPENT })
         : Promise.reject(fail.request)
     },
-    knownRules: () => [],
+    knownRules: () => known,
     addCorrections: (_id, list) => corrections.push(list),
     addRule: (owner, rule) => rules.push({ owner, rule }),
     writeFile: (path, text) => {
@@ -61,7 +62,18 @@ function setup(
     },
     now: () => Date.parse("2026-10-17T12:00:00Z"),
   })
-  return { service, requests, written, corrections, rules, stored: () => stored }
+  return {
+    service,
+    requests,
+    written,
+    corrections,
+    rules,
+    known,
+    stored: () => stored,
+    set: (next: WorkSession) => {
+      stored = next
+    },
+  }
 }
 
 describe("export service", () => {
@@ -80,6 +92,29 @@ describe("export service", () => {
     expect(t.requests).toHaveLength(1)
     expect(t.requests[0]?.tier).toBe("cheap")
     expect(t.stored().spend).toHaveLength(1)
+  })
+
+  it("reuses the last suggestions while the edits are unchanged", async () => {
+    const t = setup(edited())
+    const first = await t.service.preview("s1")
+    expect((await t.service.preview("s1")).suggestions).toEqual(first.suggestions)
+    expect(t.requests).toHaveLength(1)
+    expect(t.stored().spend[0]?.requests).toBe(1)
+    // A rule saved since then is no longer suggested.
+    t.known.push({ kind: "prose", text: "Use Raios for Damn it." })
+    expect((await t.service.preview("s1")).suggestions).toEqual([])
+    expect(t.requests).toHaveLength(1)
+    const session = withLine(t.stored(), 0, { words: "Porra!", origin: "manual" })
+    t.set({ ...session, edits: [{ index: 0, en: "Damn it!", draft: "Droga!", final: "Porra!" }] })
+    await t.service.preview("s1")
+    expect(t.requests).toHaveLength(2)
+  })
+
+  it("asks again after a failed suggestion request", async () => {
+    const t = setup(edited(), undefined, { request: new Error("offline") })
+    await t.service.preview("s1")
+    await t.service.preview("s1")
+    expect(t.requests).toHaveLength(2)
   })
 
   it("makes no request without edits and returns no suggestions for an unusable reply", async () => {

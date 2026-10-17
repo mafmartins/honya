@@ -54,6 +54,18 @@ export function createExportService(deps: ExportDeps): ExportService {
         return result
       }
       const known = deps.knownRules(session.projectId)
+      const fingerprint = JSON.stringify(
+        edits.map(({ index, en, draft, final }) => [index, en, draft, final]),
+      )
+      const saved = session.suggested
+      if (saved?.edits === fingerprint && Array.isArray(saved.suggestions)) {
+        // Read again against the current rules: one saved since then is not suggested.
+        result.suggestions = readSuggestions(
+          { suggestions: saved.suggestions.map(({ rule, lines }) => ({ ...rule, lines })) },
+          known,
+        )
+        return result
+      }
       let reply: Completion
       try {
         reply = await deps.completerFor(session.provider)({
@@ -64,17 +76,17 @@ export function createExportService(deps: ExportDeps): ExportService {
         // Suggestions are optional: a provider failure still lets the export go ahead.
         return result
       }
-      const spent = reply.spent
-      if (spent !== undefined) {
-        const latest = deps.sessions.get(sessionId)
-        deps.sessions.save({
-          ...latest,
-          spend: addSpend(latest.spend, spent.model, spent.usage),
-        })
-      }
       if (!("refused" in reply)) {
         result.suggestions = readSuggestions(reply.value, known)
       }
+      const spent = reply.spent
+      const latest = deps.sessions.get(sessionId)
+      deps.sessions.save({
+        ...latest,
+        spend:
+          spent === undefined ? latest.spend : addSpend(latest.spend, spent.model, spent.usage),
+        suggested: { edits: fingerprint, suggestions: result.suggestions },
+      })
       return result
     },
 

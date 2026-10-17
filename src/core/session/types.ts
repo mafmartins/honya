@@ -1,4 +1,4 @@
-import type { FrameSetting, Variant } from "../library/types"
+import type { FrameSetting, Rule, Variant } from "../library/types"
 import type { ModelSpend, Preset, ProviderId } from "../pipeline/types"
 
 export type LineOrigin = "ai" | "manual"
@@ -58,4 +58,13 @@ export interface WorkSession {
   framesGrabbed: number
   exportedAt: string | null
   finishedOverride: boolean | null
+  // The rule suggestions last made at export and the edits they were made from, so
+  // opening Export again with the same edits sends no new request.
+  suggested?: SavedSuggestions
+}
+
+export interface SavedSuggestions {
+  // The learnable edits asked about, as JSON.
+  edits: string
+  suggestions: { rule: Rule; lines: number[] }[]
 }

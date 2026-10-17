@@ -4,6 +4,7 @@ import {
   type Combined,
   type Learned,
   type LearnScript,
+  type Owner,
   type PickedExample,
   type ProviderId,
   type Rule,
@@ -12,6 +13,8 @@ import {
 import { useAction } from "../action"
 import { errorMessage, useApi } from "../api"
 import { formatRule } from "../format"
+import { providerName } from "../workspace/labels"
+import { styleName } from "../workspace/route"
 import { StyleChecklist } from "./StyleChecklist"
 
 type Named = LearnScript & { name: string }
@@ -22,27 +25,39 @@ interface Episode {
 }
 
 // Where a picked file goes once its dialogue styles are known.
-type Target = { kind: "pt" } | { kind: "en"; index: number }
+type Slot = { kind: "pt" } | { kind: "en"; index: number }
+
+// Where a kept suggestion is saved: the owner itself or, for a project, its style.
+type Target = "owner" | "style"
 
 type Phase =
   | { kind: "edit" }
   | { kind: "learning"; text: string }
-  | { kind: "proposals"; combined: Combined; chosen: Set<number>; skipped: string[] }
+  | {
+      kind: "proposals"
+      combined: Combined
+      chosen: Set<number>
+      targets: Target[]
+      skipped: string[]
+    }
 
-// Reads episodes the translator already did and offers glossary entries and rules for
-// the series. With several episodes, suggestions are ranked by how many episodes show
-// them, and only those seen more than once start ticked.
+// Adds reference translations (finished episodes) to a project or a language style:
+// each one is stored and read by the learning pass, which offers glossary entries and
+// rules. With several episodes, suggestions are ranked by how many episodes show them,
+// and only those seen more than once start ticked. On a project page each suggestion
+// can go to the project or its style.
 export function LearnPanel(props: {
+  owner: Owner
+  // The owner's language, naming the style a project's suggestions can go to.
   variant: Variant
-  seriesId: string
-  rules: Rule[]
-  onSave: (rules: Rule[]) => void
+  // Called once references or rules were saved, so the page reloads them.
+  onChanged: () => void
 }): React.JSX.Element {
   const api = useApi()
   const act = useAction()
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [styles, setStyles] = useState<string[] | null>(null)
-  const [pending, setPending] = useState<{ picked: PickedExample; target: Target } | null>(null)
+  const [pending, setPending] = useState<{ picked: PickedExample; target: Slot } | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: "edit" })
   const [providers, setProviders] = useState<ProviderId[]>([])
   const [provider, setProvider] = useState<ProviderId | null>(null)
@@ -68,7 +83,7 @@ export function LearnPanel(props: {
     setPhase({ kind: "edit" })
   }
 
-  const place = (named: Named, target: Target): void => {
+  const place = (named: Named, target: Slot): void => {
     setEpisodes((current) =>
       target.kind === "pt"
         ? [...current, { pt: named, en: null }]
@@ -79,7 +94,7 @@ export function LearnPanel(props: {
   }
 
   // A file with the styles already chosen reuses them; anything else asks.
-  const pick = (target: Target): void => {
+  const pick = (target: Slot): void => {
     act(async () => {
       const picked = await api.pickExample()
       if (picked === null) {
@@ -99,6 +114,7 @@ export function LearnPanel(props: {
     act(async () => {
       const learned: Learned[] = []
       const skipped: string[] = []
+      let added = 0
       for (const [index, episode] of episodes.entries()) {
         setPhase({
           kind: "learning",
@@ -110,16 +126,23 @@ export function LearnPanel(props: {
         try {
           learned.push(
             await api.learnFromScript(
-              props.variant,
-              props.seriesId,
+              props.owner,
               chosenProvider,
               script(episode.pt),
               episode.en === null ? null : script(episode.en),
             ),
           )
+          // Kept only once read, so a failed episode can be added again without a copy.
+          await api.addReference(props.owner, episode.pt.name, episode.pt.text, [
+            ...episode.pt.dialogueStyles,
+          ])
+          added += 1
         } catch (error) {
           skipped.push(`${episode.pt.name}: ${errorMessage(error)}`)
         }
+      }
+      if (added > 0) {
+        props.onChanged()
       }
       if (learned.length === 0) {
         setPhase({ kind: "edit" })
@@ -135,7 +158,8 @@ export function LearnPanel(props: {
             combined.episodes === 1 || suggestion.episodes > 1 ? [index] : [],
           ),
         )
-        setPhase({ kind: "proposals", combined, chosen, skipped })
+        const targets = combined.suggestions.map((): Target => "owner")
+        setPhase({ kind: "proposals", combined, chosen, targets, skipped })
       } catch (error) {
         setPhase({ kind: "edit" })
         throw error
@@ -147,7 +171,7 @@ export function LearnPanel(props: {
     const { picked, target } = pending
     return (
       <div className="learn">
-        <p>{`Which styles are dialogue in ${picked.name}?`}</p>
+        <p className="learn-note">{`Which styles are dialogue in ${picked.name}?`}</p>
         <StyleChecklist
           styles={picked.styles}
           confirmLabel="Use these styles"
@@ -170,6 +194,7 @@ export function LearnPanel(props: {
     return (
       <Proposals
         phase={phase}
+        styleTarget={props.owner.kind === "project" ? styleName(props.variant) : null}
         onToggle={(index) => {
           const chosen = new Set(phase.chosen)
           if (chosen.has(index)) {
@@ -179,9 +204,24 @@ export function LearnPanel(props: {
           }
           setPhase({ ...phase, chosen })
         }}
+        onTarget={(index, target) => {
+          setPhase({
+            ...phase,
+            targets: phase.targets.map((value, at) => (at === index ? target : value)),
+          })
+        }}
         onSave={(kept) => {
-          props.onSave([...props.rules, ...kept])
-          reset()
+          act(async () => {
+            const style: Owner = { kind: "style", variant: props.variant }
+            try {
+              for (const { rule, target } of kept) {
+                await api.addRule(target === "style" ? style : props.owner, rule)
+              }
+            } finally {
+              props.onChanged()
+            }
+            reset()
+          })
         }}
         onDiscard={reset}
       />
@@ -191,17 +231,19 @@ export function LearnPanel(props: {
   if (episodes.length === 0) {
     return (
       <div className="learn">
-        <button
-          type="button"
-          onClick={() => {
-            pick({ kind: "pt" })
-          }}
-        >
-          Learn from translated episodes…
-        </button>
-        <p className="muted">
-          Reads episodes you already translated and suggests glossary entries and rules for this
-          series. You choose what to keep.
+        <div className="learn-row">
+          <button
+            type="button"
+            onClick={() => {
+              pick({ kind: "pt" })
+            }}
+          >
+            Add reference translations…
+          </button>
+        </div>
+        <p className="hint">
+          Finished episodes you translated. Honya keeps them as examples of your voice and suggests
+          glossary entries and rules from them; you choose what to keep.
         </p>
       </div>
     )
@@ -210,11 +252,10 @@ export function LearnPanel(props: {
   const learning = phase.kind === "learning"
   return (
     <div className="learn">
-      <p>Translated episodes</p>
-      <ul className="episodes">
+      <ul className="learn-episodes" aria-label="Episodes to add">
         {episodes.map((episode, index) => (
           <li key={`${String(index)}-${episode.pt.name}`}>
-            <span>{episode.pt.name}</span>{" "}
+            <span className="learn-name">{episode.pt.name}</span>
             {episode.en === null ? (
               <button
                 type="button"
@@ -227,10 +268,11 @@ export function LearnPanel(props: {
                 Add English…
               </button>
             ) : (
-              <span className="muted">{`with ${episode.en.name}`}</span>
-            )}{" "}
+              <span className="hint">{`with ${episode.en.name}`}</span>
+            )}
             <button
               type="button"
+              className="icon"
               disabled={learning}
               aria-label={`Remove ${episode.pt.name}`}
               onClick={() => {
@@ -242,7 +284,7 @@ export function LearnPanel(props: {
           </li>
         ))}
       </ul>
-      <p>
+      <div className="learn-row">
         <button
           type="button"
           disabled={learning}
@@ -251,20 +293,18 @@ export function LearnPanel(props: {
           }}
         >
           Add another episode…
-        </button>{" "}
-        <span className="muted">
+        </button>
+        <span className="hint">
           The English script is optional; with it, terms are matched line by line instead of
           guessed.
         </span>
-      </p>
+      </div>
       {providers.length === 0 ? (
-        <p className="muted">Add a provider key above to learn from scripts.</p>
+        <p className="hint">Add a provider key in Settings to learn from scripts.</p>
       ) : (
-        <label>
-          <span>provider</span>{" "}
+        <label className="learn-provider">
+          <span className="field-label">Provider</span>
           <select
-            id="learn-provider"
-            aria-label="provider"
             value={provider ?? ""}
             disabled={learning}
             onChange={(event) => {
@@ -273,16 +313,16 @@ export function LearnPanel(props: {
           >
             {providers.map((id) => (
               <option key={id} value={id}>
-                {id}
+                {providerName(id)}
               </option>
             ))}
           </select>
         </label>
       )}
-      <p>
+      <div className="learn-row">
         <button
           type="button"
-          className="action"
+          className="primary"
           disabled={learning || provider === null}
           onClick={() => {
             if (provider !== null) {
@@ -295,33 +335,40 @@ export function LearnPanel(props: {
             : episodes.length === 1
               ? "Learn"
               : `Learn from ${String(episodes.length)} episodes`}
-        </button>{" "}
+        </button>
         <button type="button" disabled={learning} onClick={reset}>
           Cancel
         </button>
-      </p>
+      </div>
     </div>
   )
 }
 
 function Proposals(props: {
   phase: Extract<Phase, { kind: "proposals" }>
+  // The style a project's suggestion can go to instead; null on a style page.
+  styleTarget: string | null
   onToggle: (index: number) => void
-  onSave: (kept: Rule[]) => void
+  onTarget: (index: number, target: Target) => void
+  onSave: (kept: { rule: Rule; target: Target }[]) => void
   onDiscard: () => void
 }): React.JSX.Element {
-  const { combined, chosen, skipped } = props.phase
+  const { combined, chosen, targets, skipped } = props.phase
   const several = combined.episodes > 1
   const skippedNote =
-    skipped.length === 0 ? null : <p className="muted">{`Skipped ${skipped.join(" ")}`}</p>
+    skipped.length === 0 ? null : <p className="hint">{`Skipped ${skipped.join(" ")}`}</p>
   if (combined.suggestions.length === 0) {
     return (
       <div className="learn">
         {skippedNote}
-        <p>Nothing new to suggest: the series rules already cover what these episodes show.</p>
-        <button type="button" onClick={props.onDiscard}>
-          Done
-        </button>
+        <p className="learn-note">
+          Nothing new to suggest: the rules already cover what these episodes show.
+        </p>
+        <div className="learn-row">
+          <button type="button" onClick={props.onDiscard}>
+            Done
+          </button>
+        </div>
       </div>
     )
   }
@@ -332,52 +379,71 @@ function Proposals(props: {
   return (
     <div className="learn">
       {skippedNote}
-      <p>
+      <p className="learn-note">
         {several
           ? `Suggestions from ${String(combined.episodes)} episodes (${source}). Ones seen in more than one episode are ticked.`
           : `Suggestions from ${source}. Untick what you don't want.`}
       </p>
-      <ul className="proposals">
-        {combined.suggestions.map((suggestion, index) => (
-          <li key={index}>
-            <label className="picked">
-              <input
-                type="checkbox"
-                checked={chosen.has(index)}
-                onChange={() => {
-                  props.onToggle(index)
-                }}
-              />
-              {formatRule(suggestion.rule)}
-            </label>
-            {several ? (
-              <span className="muted">
-                {` · ${String(suggestion.episodes)} of ${String(combined.episodes)} episodes`}
-                {suggestion.alternatives.length > 0
-                  ? ` · also ${suggestion.alternatives.join(", ")}`
-                  : ""}
-              </span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      <button
-        type="button"
-        className="action"
-        disabled={chosen.size === 0}
-        onClick={() => {
-          props.onSave(
-            combined.suggestions.flatMap((suggestion, index) =>
-              chosen.has(index) ? [suggestion.rule] : [],
-            ),
+      <ul className="learn-proposals">
+        {combined.suggestions.map((suggestion, index) => {
+          const text = formatRule(suggestion.rule)
+          return (
+            <li key={`${String(index)}:${text}`}>
+              <label className="choice">
+                <input
+                  type="checkbox"
+                  checked={chosen.has(index)}
+                  onChange={() => {
+                    props.onToggle(index)
+                  }}
+                />
+                {text}
+              </label>
+              {several ? (
+                <span className="hint">
+                  {`· ${String(suggestion.episodes)} of ${String(combined.episodes)} episodes`}
+                  {suggestion.alternatives.length > 0
+                    ? ` · also ${suggestion.alternatives.join(", ")}`
+                    : ""}
+                </span>
+              ) : null}
+              {props.styleTarget === null ? null : (
+                <select
+                  aria-label={`Save “${text}” to`}
+                  value={targets[index] ?? "owner"}
+                  onChange={(event) => {
+                    props.onTarget(index, event.target.value === "style" ? "style" : "owner")
+                  }}
+                >
+                  <option value="owner">This project</option>
+                  <option value="style">{props.styleTarget}</option>
+                </select>
+              )}
+            </li>
           )
-        }}
-      >
-        {`Save ${String(chosen.size)} to the series`}
-      </button>{" "}
-      <button type="button" onClick={props.onDiscard}>
-        Discard
-      </button>
+        })}
+      </ul>
+      <div className="learn-row">
+        <button
+          type="button"
+          className="primary"
+          disabled={chosen.size === 0}
+          onClick={() => {
+            props.onSave(
+              combined.suggestions.flatMap((suggestion, index) =>
+                chosen.has(index)
+                  ? [{ rule: suggestion.rule, target: targets[index] ?? "owner" }]
+                  : [],
+              ),
+            )
+          }}
+        >
+          {chosen.size === 1 ? "Save 1 suggestion" : `Save ${String(chosen.size)} suggestions`}
+        </button>
+        <button type="button" onClick={props.onDiscard}>
+          Discard
+        </button>
+      </div>
     </div>
   )
 }

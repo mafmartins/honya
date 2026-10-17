@@ -15,12 +15,15 @@ function learner(
 ): ReturnType<typeof createLearner> {
   return createLearner({
     knownRules: () => [{ kind: "prose", text: "Keep -san." }],
+    variantOf: () => "pt-pt",
     completerFor: () => (request) => {
       requests.push(request)
       return Promise.resolve(reply === null ? { refused: true, reason: "busy" } : { value: reply })
     },
   })
 }
+
+const OWNER = { kind: "project", id: "s" } as const
 
 const script = (text: string): { text: string; dialogueStyles: string[] } => ({
   text,
@@ -33,7 +36,7 @@ describe("learning from a translated episode", () => {
     const learned = await learner(
       { glossary: [{ source: "Big brother", pt: "Mano" }], rules: ["Keep -san.", "Use tu."] },
       requests,
-    ).learn("pt-pt", "s", "gemini", script(PT), script(EN))
+    ).learn(OWNER, "gemini", script(PT), script(EN))
     expect(requests.map((r) => [r.tier, r.schema.name])).toEqual([["strong", "learned_style"]])
     expect(requests[0]?.prompt).toContain("Big brother! => Mano!")
     expect(learned).toEqual({
@@ -46,12 +49,12 @@ describe("learning from a translated episode", () => {
   it("explains scripts that can't be used", async () => {
     const ok = learner({ glossary: [], rules: [] })
     await expect(
-      ok.learn("pt-pt", "s", "gemini", { text: PT, dialogueStyles: ["Sign"] }, null),
+      ok.learn(OWNER, "gemini", { text: PT, dialogueStyles: ["Sign"] }, null),
     ).rejects.toThrow("None of the chosen styles has dialogue in the translated script.")
-    await expect(
-      ok.learn("pt-pt", "s", "gemini", script(PT), script(EN_ELSEWHERE)),
-    ).rejects.toThrow("no lines at the same times")
-    await expect(learner(null).learn("pt-pt", "s", "gemini", script(PT), null)).rejects.toThrow(
+    await expect(ok.learn(OWNER, "gemini", script(PT), script(EN_ELSEWHERE))).rejects.toThrow(
+      "no lines at the same times",
+    )
+    await expect(learner(null).learn(OWNER, "gemini", script(PT), null)).rejects.toThrow(
       "The model's reply couldn't be used (busy). Try again.",
     )
   })

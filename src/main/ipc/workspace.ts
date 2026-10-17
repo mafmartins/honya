@@ -283,7 +283,7 @@ function sessionPatch(value: unknown): { provider?: ProviderId; preset?: Preset 
   return patch
 }
 
-function readOwner(value: unknown): Owner | null {
+export function readOwner(value: unknown): Owner | null {
   if (!isRecord(value)) {
     return null
   }

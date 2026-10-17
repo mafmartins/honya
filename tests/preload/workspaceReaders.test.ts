@@ -33,6 +33,7 @@ const stats = {
   strongLines: 0,
   retranslatedLines: 0,
   cost: { usd: 0.01, unpriced: [], input: 100, output: 50, requests: 2 },
+  models: [{ model: "claude-haiku-5-5", requests: 2, input: 100, output: 50, usd: 0.01 }],
   activeMs: 1200,
   framesGrabbed: 0,
 }
@@ -210,6 +211,7 @@ describe("workspace readers", () => {
     expect(readModelOptions({ cheap: [{ id: "a" }], strong: [] })).toBeNull()
     expect(readSessionStats(stats)).toEqual(stats)
     expect(readSessionStats({ ...stats, cost: { ...stats.cost, unpriced: [1] } })).toBeNull()
+    expect(readSessionStats({ ...stats, models: [{ model: "a", requests: 1 }] })).toBeNull()
   })
 
   it("accepts launch info and session summaries", () => {

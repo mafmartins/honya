@@ -142,12 +142,8 @@ const honya: HonyaApi = {
   saveBase: (base) => read("honya:save-base", [base], readBaseProfile),
   importExample: (variant, name, text, styles) =>
     read("honya:import-example", [variant, name, text, styles], readBaseProfile),
-  learnFromScript: (variant, seriesId, provider, portuguese, english) =>
-    read(
-      "honya:learn-from-script",
-      [variant, seriesId, provider, portuguese, english],
-      readLearned,
-    ),
+  learnFromScript: (owner, provider, portuguese, english) =>
+    read("honya:learn-from-script", [owner, provider, portuguese, english], readLearned),
   combineLearned: (provider, learned) =>
     read("honya:combine-learned", [provider, learned], readCombined),
   prepareTranslation: (scriptPath, variant) =>

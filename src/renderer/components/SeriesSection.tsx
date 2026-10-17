@@ -169,10 +169,14 @@ export function SeriesSection({ variant }: { variant: Variant }): React.JSX.Elem
           />
           <LearnPanel
             key={selected}
+            owner={{ kind: "project", id: selected }}
             variant={variant}
-            seriesId={selected}
-            rules={rules}
-            onSave={saveRules}
+            onChanged={() => {
+              act(async () => {
+                setRules(await api.loadSeriesRules(variant, selected))
+                await refresh()
+              })
+            }}
           />
         </>
       )}

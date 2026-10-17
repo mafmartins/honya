@@ -30,7 +30,7 @@ import { callEntry, problemEntry } from "./providerLog"
 import { createSettingsStore } from "./settingsStore"
 import { createAiService, type AiService, type WorkspaceEvent } from "./workspace/ai"
 import { createExportService } from "./workspace/export"
-import { createProjectService } from "./workspace/projects"
+import { createProjectService, type ProjectService } from "./workspace/projects"
 import { createWorkSessions, type WorkSessions } from "./workspace/sessions"
 import { BEFORE_CLOSE_CHANNEL, CLOSE_ANSWER_CHANNEL, WORKSPACE_EVENT_CHANNEL } from "../shared/api"
 import { createCloseGuard, type CloseGuard } from "./closeGuard"
@@ -45,19 +45,6 @@ function boot(): void {
   const store = createFileStore(join(app.getPath("userData"), "profiles"))
   const profiles = createProfileHandlers(store)
   const sessions = createSessionStore(join(app.getPath("userData"), "sessions"))
-  const learner = createLearner({
-    knownRules: (variant, seriesId) => [
-      ...profiles.loadBase(variant).base.rules,
-      ...profiles.loadSeriesRules(variant, seriesId),
-    ],
-    completerFor: (provider) =>
-      withRetry(
-        (request) => completeWithProvider(secrets, models, provider, request),
-        sleep,
-        () => undefined,
-      ),
-  })
-  registerSetupIpc({ open: openFile, secrets, models, profiles, learner })
   const runner = createRunner({
     sessions,
     loadCard: (variant, seriesId) => loadCard(profiles, variant, seriesId),
@@ -97,7 +84,19 @@ function boot(): void {
     sessions,
     readScript: (path) => readFileSync(path, "utf8"),
   })
-  const ai = bootWorkspace(store, profiles, secrets, models)
+  const { ai, projects } = bootWorkspace(store, profiles, secrets, models)
+  const learner = createLearner({
+    knownRules: (owner) => projects.knownRules(owner),
+    variantOf: (owner) =>
+      owner.kind === "style" ? owner.variant : projects.getProject(owner.id).summary.variant,
+    completerFor: (provider) =>
+      withRetry(
+        (request) => completeWithProvider(secrets, models, provider, request),
+        sleep,
+        () => undefined,
+      ),
+  })
+  registerSetupIpc({ open: openFile, secrets, models, profiles, learner })
   let quitting = false
   app.on("before-quit", (event) => {
     if (quitting || ai.activeId() === null) {
@@ -126,14 +125,14 @@ function boot(): void {
   })
 }
 
-// The workspace services: projects, v3 sessions, the AI and export. Returns the AI
-// so quitting can stop a run.
+// The workspace services: projects, v3 sessions, the AI and export. Returns the AI,
+// so quitting can stop a run, and the projects, which learning reads rules from.
 function bootWorkspace(
   store: FileProfileStore,
   profiles: ProfileHandlers,
   secrets: SecretStore,
   models: ModelStore,
-): AiService {
+): { ai: AiService; projects: ProjectService } {
   const settings = createSettingsStore({ read: readSettingsFile, write: writeSettingsFile })
   // The project service counts sessions and sessions name their project, so each
   // reaches the other through a closure; the session side reads the profile store
@@ -228,7 +227,7 @@ function bootWorkspace(
       shell.showItemInFolder(path)
     },
   })
-  return ai
+  return { ai, projects }
 }
 
 function findSeries(store: FileProfileStore, id: string): SeriesProfile | null {

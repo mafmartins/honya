@@ -11,6 +11,8 @@ export interface MenuProps {
   route: Route
   projectId: string | null
   sessionId: string | null
+  // Changes when a page renamed or deleted a project, so the lists load again.
+  revision?: number
   onNavigate: (route: Route) => void
   // A recent session, with its project.
   onOpenSession: (projectId: string, sessionId: string) => void
@@ -23,6 +25,7 @@ export function Menu({
   route,
   projectId,
   sessionId,
+  revision = 0,
   onNavigate,
   onOpenSession,
   onOpenProject,
@@ -51,7 +54,7 @@ export function Menu({
     return () => {
       live = false
     }
-  }, [api, report, route, sessionId])
+  }, [api, report, route, sessionId, revision])
 
   const navItem = (label: string, target: Route, active: boolean): React.JSX.Element => (
     <li>

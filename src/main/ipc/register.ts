@@ -6,6 +6,7 @@ import type { SecretStore } from "../secrets"
 import { pickExample, pickScript, pickVideo, type OpenFile } from "./files"
 import type { ProfileHandlers } from "./profiles"
 import type { Learner } from "../learn"
+import { readOwner } from "./workspace"
 import type { LearnScript, Learned } from "../../core/library/learn"
 
 export interface SetupDeps {
@@ -75,12 +76,16 @@ export function registerSetupIpc(deps: SetupDeps): void {
     return profiles.importExample(variant(args, 0), text(args, 1), text(args, 2), styles)
   })
   handle("honya:learn-from-script", (args) => {
-    const portuguese = learnScript(args[3])
-    const english = args[4] === null ? null : learnScript(args[4])
+    const owner = readOwner(args[0])
+    if (owner === null) {
+      throw new Error("Invalid rule owner.")
+    }
+    const portuguese = learnScript(args[2])
+    const english = args[3] === null ? null : learnScript(args[3])
     if (portuguese === undefined || portuguese === null || english === undefined) {
       throw new Error("Invalid script.")
     }
-    return learner.learn(variant(args, 0), text(args, 1), provider(args, 2), portuguese, english)
+    return learner.learn(owner, provider(args, 1), portuguese, english)
   })
   handle("honya:combine-learned", (args) => {
     const learned = learnedList(args[1])

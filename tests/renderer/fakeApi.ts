@@ -430,6 +430,18 @@ function fakeWorkspace(keys: Set<ProviderId>): {
         output: item.requests * 500,
         requests: item.requests,
       },
+      models:
+        item.requests === 0
+          ? []
+          : [
+              {
+                model: "claude-haiku-5-5",
+                requests: item.requests,
+                input: item.requests * 1000,
+                output: item.requests * 500,
+                usd: item.usd,
+              },
+            ],
       activeMs: item.requests * 30000,
       framesGrabbed: 0,
     }

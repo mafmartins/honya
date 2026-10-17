@@ -104,12 +104,39 @@ describe("workspace shell", () => {
     expect(within(nav).getByRole("button", { name: new RegExp(FAKE_SCRIPT_NAME) })).toBeTruthy()
   })
 
+  it("goes to Projects after deleting the open session's project", async () => {
+    const api = fakeApi()
+    const { projectId } = await withSession(api)
+    await renderShell(api)
+    fireEvent.click(await within(menu()).findByRole("button", { name: /Demon Slayer/ }))
+    expect(await within(menu()).findByRole("heading", { name: "This session" })).toBeTruthy()
+    const select = within(menu()).getByRole("combobox", { name: "Project" })
+    expect((select as HTMLSelectElement).value).toBe(projectId)
+    fireEvent.click(within(menu()).getByRole("button", { name: "Projects" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Demon Slayer" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }))
+    const dialog = await screen.findByRole("dialog", { name: "Delete Demon Slayer?" })
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }))
+    expect(await screen.findByText("No projects yet.")).toBeTruthy()
+    expect(screen.getByRole("heading", { level: 1, name: "Projects" })).toBeTruthy()
+    expect(within(menu()).queryByRole("heading", { name: "This session" })).toBeNull()
+    await waitFor(() => {
+      expect(within(select).queryByRole("option", { name: "Demon Slayer" })).toBeNull()
+    })
+  })
+
   it("titles a project's page with its name", async () => {
     const api = fakeApi()
     const project = await api.createProject("Frieren", "pt-br")
     render(
       <ApiContext.Provider value={api}>
-        <ProfilePage owner={{ kind: "project", id: project.id }} />
+        <ProfilePage
+          owner={{ kind: "project", id: project.id }}
+          onOpenSession={() => undefined}
+          onNewSession={() => undefined}
+          onDeleted={() => undefined}
+          onChanged={() => undefined}
+        />
       </ApiContext.Provider>,
     )
     expect(await screen.findByRole("heading", { level: 1, name: "Frieren" })).toBeTruthy()

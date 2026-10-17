@@ -11,19 +11,7 @@ import {
 } from "../../shared/api"
 import { useApi } from "../api"
 import { Dialog } from "./Dialog"
-import { providerName, VARIANT_LABEL } from "./labels"
-
-const PRESET_LABEL: Record<Preset, string> = {
-  save: "Save — cheapest",
-  balanced: "Balanced",
-  best: "Best — highest quality",
-}
-const FRAMES: readonly FrameSetting[] = ["none", "marked", "every"]
-const FRAME_LABEL: Record<FrameSetting, string> = {
-  none: "No frames",
-  marked: "Only lines that need one",
-  every: "Every line",
-}
+import { FRAME_LABEL, FRAMES, PRESET_LABEL, providerName, VARIANT_LABEL } from "./labels"
 
 type Test =
   { state: "idle" } | { state: "testing" } | { state: "ok" } | { state: "failed"; message: string }

@@ -777,8 +777,10 @@ export function readSessionStats(value: unknown): SessionStats | null {
   }
   const { lines, flags } = value
   const cost = readCost(value.cost)
+  const models = readModelCosts(value.models)
   if (
     cost === null ||
+    models === null ||
     !isCount(lines.ai) ||
     !isCount(lines.manual) ||
     !isCount(lines.untranslated) ||
@@ -810,9 +812,37 @@ export function readSessionStats(value: unknown): SessionStats | null {
     strongLines: value.strongLines,
     retranslatedLines: value.retranslatedLines,
     cost,
+    models,
     activeMs: value.activeMs,
     framesGrabbed: value.framesGrabbed,
   }
+}
+
+function readModelCosts(value: unknown): SessionStats["models"] | null {
+  if (!Array.isArray(value)) {
+    return null
+  }
+  const models: SessionStats["models"] = []
+  for (const item of value as readonly unknown[]) {
+    if (
+      !isRecord(item) ||
+      typeof item.model !== "string" ||
+      !isCount(item.requests) ||
+      !isCount(item.input) ||
+      !isCount(item.output) ||
+      !(item.usd === null || isCount(item.usd))
+    ) {
+      return null
+    }
+    models.push({
+      model: item.model,
+      requests: item.requests,
+      input: item.input,
+      output: item.output,
+      usd: item.usd,
+    })
+  }
+  return models
 }
 
 function readListedStyle(value: unknown): ListedStyle | null {

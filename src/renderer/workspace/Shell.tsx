@@ -6,7 +6,7 @@ import { ErrorLine } from "../ErrorLine"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { LaunchDialog } from "./LaunchDialog"
 import { Menu } from "./Menu"
-import { ProfilePage } from "./pages/ProfilePage"
+import { ProfilePage, type ProfileActions } from "./pages/ProfilePage"
 import { ProjectsPage } from "./pages/ProjectsPage"
 import { SettingsPage } from "./pages/SettingsPage"
 import { StatsPage } from "./pages/StatsPage"
@@ -76,6 +76,51 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
       showSession(project, unfinished?.id ?? (await api.newSession(project)))
     },
     [api, showSession],
+  )
+  // Opening another session leaves the open one, so a running AI asks first.
+  const openSession = useCallback(
+    (project: string, session: string): void => {
+      if (session === sessionId) {
+        showSession(project, session)
+      } else {
+        leave(() => {
+          showSession(project, session)
+        })
+      }
+    },
+    [leave, sessionId, showSession],
+  )
+  const startSession = useCallback(
+    (project: string): void => {
+      leave(() => {
+        api.newSession(project).then(
+          (session) => {
+            showSession(project, session)
+          },
+          (failure: unknown) => {
+            setError(errorMessage(failure))
+          },
+        )
+      })
+    },
+    [api, leave, showSession],
+  )
+  // Bumped when a page renames or deletes a project, so the menu lists it again.
+  const [revision, setRevision] = useState(0)
+  const changed = useCallback((): void => {
+    setRevision((current) => current + 1)
+  }, [])
+  // A deleted project took its sessions with it, the open one included.
+  const deleted = useCallback(
+    (project: string): void => {
+      if (project === projectId) {
+        setProjectId(null)
+        setSessionId(null)
+      }
+      changed()
+      show({ page: "projects" })
+    },
+    [changed, projectId, show],
   )
   // Other pages keep the session open, so its run goes on; another session doesn't.
   const navigate = useCallback(
@@ -161,16 +206,9 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
             route={route}
             projectId={projectId}
             sessionId={sessionId}
+            revision={revision}
             onNavigate={navigate}
-            onOpenSession={(project, session) => {
-              if (session === sessionId) {
-                showSession(project, session)
-              } else {
-                leave(() => {
-                  showSession(project, session)
-                })
-              }
-            }}
+            onOpenSession={openSession}
             onOpenProject={(id) => {
               leave(() => {
                 showProject(id).catch((failure: unknown) => {
@@ -181,7 +219,17 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
           />
           <main className="shell-main">
             <ErrorLine message={error} />
-            <Page route={route} sessionId={sessionId} />
+            <Page
+              route={route}
+              sessionId={sessionId}
+              onNavigate={navigate}
+              actions={{
+                onOpenSession: openSession,
+                onNewSession: startSession,
+                onDeleted: deleted,
+                onChanged: changed,
+              }}
+            />
           </main>
           {dialog.kind === "setup" ? <SetupDialog initial={dialog.settings} onDone={boot} /> : null}
           {dialog.kind === "launch" ? (
@@ -255,18 +303,34 @@ const STOP_RUN = {
   cancelLabel: "Keep translating",
 }
 
-function Page({ route, sessionId }: { route: Route; sessionId: string | null }): React.JSX.Element {
+function Page({
+  route,
+  sessionId,
+  onNavigate,
+  actions,
+}: {
+  route: Route
+  sessionId: string | null
+  onNavigate: (route: Route) => void
+  actions: ProfileActions
+}): React.JSX.Element {
   switch (route.page) {
     case "session":
       return <SessionPage sessionId={route.sessionId} />
     case "stats":
       return <StatsPage sessionId={sessionId} />
     case "projects":
-      return <ProjectsPage />
+      return (
+        <ProjectsPage
+          onOpen={(id) => {
+            onNavigate({ page: "project", id })
+          }}
+        />
+      )
     case "project":
-      return <ProfilePage owner={{ kind: "project", id: route.id }} />
+      return <ProfilePage owner={{ kind: "project", id: route.id }} {...actions} />
     case "style":
-      return <ProfilePage owner={{ kind: "style", variant: route.variant }} />
+      return <ProfilePage owner={{ kind: "style", variant: route.variant }} {...actions} />
     case "settings":
       return <SettingsPage />
   }

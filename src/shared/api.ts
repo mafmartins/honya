@@ -38,7 +38,7 @@ export type { FrameSetting } from "../core/library/types"
 export type { ModelOption } from "../core/providers/catalog"
 export type { Cost } from "../core/providers/prices"
 export type { LineOrigin } from "../core/session/types"
-export type { SessionStats } from "../core/session/stats"
+export type { ModelCost, SessionStats } from "../core/session/stats"
 export type { AppSettings } from "../main/settingsStore"
 export type { WorkspaceEvent } from "../main/workspace/ai"
 export type { ExportPreview } from "../main/workspace/export"
@@ -81,10 +81,9 @@ export interface SetupApi {
     dialogueStyles: string[],
   ): Promise<BaseProfile>
   // Reads an episode the translator already did and proposes glossary entries and rules
-  // for the series; nothing is saved.
+  // for a project or a language style; nothing is saved.
   learnFromScript(
-    variant: Variant,
-    seriesId: string,
+    owner: Owner,
     provider: ProviderId,
     portuguese: LearnScript,
     english: LearnScript | null,

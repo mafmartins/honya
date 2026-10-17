@@ -229,6 +229,31 @@ describe("leaving a session while the AI runs", () => {
     })
   })
 
+  it("asks before a project page opens or starts another session", async () => {
+    const api = fakeApi()
+    await runningShell(api)
+    const frieren = (await api.listProjects()).find((item) => item.name === "Frieren")
+    fireEvent.click(within(menu()).getByRole("button", { name: "Projects" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Frieren" }))
+    const sessions = await screen.findByRole("region", { name: "Sessions" })
+    fireEvent.click(within(sessions).getByRole("button", { name: "New session" }))
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Keep translating" }),
+    )
+    expect(await api.projectSessions(frieren?.id ?? "")).toHaveLength(1)
+
+    fireEvent.click(await within(sessions).findByRole("button", { name: "Open" }))
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Stop" }))
+    await waitFor(() => {
+      expect(
+        within(menu())
+          .getByRole("button", { name: /Frieren/ })
+          .getAttribute("aria-current"),
+      ).toBe("true")
+    })
+    expect(screen.getByRole("heading", { level: 1, name: FAKE_SCRIPT_NAME })).toBeTruthy()
+  })
+
   it("lets other pages open while the run goes on", async () => {
     const api = fakeApi()
     await runningShell(api)

@@ -20,7 +20,24 @@ describe("session stats", () => {
     expect(stats.retranslatedLines).toBe(0)
     expect(stats.cost).toEqual(costOf(spend))
     expect(stats.cost.usd).not.toBeNull()
+    expect(stats.models).toEqual([
+      {
+        model: "gemini-3.8-flash",
+        requests: 2,
+        input: 1000,
+        output: 500,
+        usd: costOf(spend).usd,
+      },
+    ])
     expect(stats.activeMs).toBe(5000)
     expect(stats.framesGrabbed).toBe(3)
+  })
+
+  it("leaves a model's dollars out when its price isn't known", () => {
+    const spend = [{ model: "mystery-1", input: 10, output: 5, cached: 0, requests: 1 }]
+    const stats = sessionStats({ ...makeSession(), spend })
+    expect(stats.models).toEqual([
+      { model: "mystery-1", requests: 1, input: 10, output: 5, usd: null },
+    ])
   })
 })

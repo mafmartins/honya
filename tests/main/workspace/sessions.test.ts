@@ -35,25 +35,34 @@ const CARD: StyleCard = {
   rules: [],
 }
 
-function setup() {
+function setup(failWrites = { on: false }) {
   const dir = mkdtempSync(join(tmpdir(), "honya-sessions-"))
   const files = new Map<string, string>()
   let clock = Date.parse("2026-01-01T00:00:00Z")
   let n = 0
   const settings = createSettingsStore({ read: () => null, write: () => {} })
-  const store = createWorkSessions(dir, {
-    now: () => (clock += 1000),
-    newId: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
-    projectName: (id) => `Project ${id}`,
-    card: () => CARD,
-    readScript: (path) => {
-      const text = files.get(path)
-      if (text === undefined) throw new Error("missing file")
-      return text
+  const store = createWorkSessions(
+    dir,
+    {
+      now: () => (clock += 1000),
+      newId: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
+      projectName: (id) => `Project ${id}`,
+      card: () => CARD,
+      readScript: (path) => {
+        const text = files.get(path)
+        if (text === undefined) throw new Error("missing file")
+        return text
+      },
+      settings: () => settings.get(),
+      project: () => ({ preset: "balanced", frameSetting: "marked", variant: "pt-br" }),
     },
-    settings: () => settings.get(),
-    project: () => ({ preset: "balanced", frameSetting: "marked", variant: "pt-br" }),
-  })
+    {
+      writeFile: (path, data) => {
+        if (failWrites.on) throw new Error("disk full")
+        writeFileSync(path, data, "utf8")
+      },
+    },
+  )
   return { dir, files, store }
 }
 
@@ -166,6 +175,7 @@ describe("work sessions", () => {
     store.writeFrame(id, "3", new Uint8Array([1, 2]))
     expect(Array.from(store.readFrame(id, "3") ?? [])).toEqual([1, 2])
     expect(() => store.readFrame(id, "../x")).toThrow()
+    expect(() => { store.clearFrames(".."); }).toThrow()
     store.clearFrames(id)
     expect(store.readFrame(id, "3")).toBeNull()
   })
@@ -220,5 +230,37 @@ describe("work sessions", () => {
     expect(store.get(id).lines[0]?.words).toBe("Olá.")
     expect(readdirSync(dir).sort()).toEqual([`${id}.json`, `${id}.v2.json`, `${bad}.json`].sort())
     expect(store.migrate()).toEqual({ migrated: 0, skipped: [`${bad}.json: not valid JSON`] })
+  })
+
+  it("leaves a v2 file untouched and reports it when the swap fails", () => {
+    const failWrites = { on: false }
+    const { store, dir } = setup(failWrites)
+    const id = "33333333-3333-4333-8333-333333333333"
+    const original = JSON.stringify({ version: 2, id })
+    writeFileSync(join(dir, `${id}.json`), original)
+    failWrites.on = true
+    const result = store.migrate()
+    expect(result.migrated).toBe(0)
+    expect(result.skipped).toHaveLength(1)
+    expect(readFileSync(join(dir, `${id}.json`), "utf8")).toBe(original)
+    expect(readdirSync(dir)).toEqual([`${id}.json`])
+  })
+
+  it("refuses to load a script over an existing one or confirm styles twice", () => {
+    const { store, files } = setup()
+    files.set("/x/ep1.ass", SCRIPT)
+    files.set("/x/a.ass", AMBIGUOUS)
+    const id = store.create("p1")
+    store.loadScript(id, "/x/ep1.ass")
+    store.edit(id, 0, "Olá.")
+    expect(() => store.loadScript(id, "/x/ep1.ass")).toThrow("This session already has a script.")
+    expect(() => store.confirmStyles(id, ["Default"])).toThrow("This session already has a script.")
+    expect(store.get(id).lines[0]?.words).toBe("Olá.")
+    const second = store.create("p1")
+    store.loadScript(second, "/x/a.ass")
+    store.confirmStyles(second, ["Zorp"])
+    expect(() => store.confirmStyles(second, ["Zorp"])).toThrow(
+      "This session already has a script.",
+    )
   })
 })

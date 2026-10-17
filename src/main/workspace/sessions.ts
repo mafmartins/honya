@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -96,7 +97,21 @@ export interface WorkSessions {
   clearFrames(id: string): void
 }
 
-export function createWorkSessions(dir: string, deps: WorkSessionDeps): WorkSessions {
+export interface WorkSessionFileOps {
+  writeFile(path: string, data: string): void
+}
+
+const DEFAULT_OPS: WorkSessionFileOps = {
+  writeFile(path, data) {
+    writeFileSync(path, data, "utf8")
+  },
+}
+
+export function createWorkSessions(
+  dir: string,
+  deps: WorkSessionDeps,
+  ops: WorkSessionFileOps = DEFAULT_OPS,
+): WorkSessions {
   const pathFor = (id: string): string => {
     if (!SESSION_ID.test(id)) {
       throw new Error("Invalid session id.")
@@ -123,7 +138,7 @@ export function createWorkSessions(dir: string, deps: WorkSessionDeps): WorkSess
     mkdirSync(dir, { recursive: true })
     const temp = `${path}.${randomUUID()}.tmp`
     try {
-      writeFileSync(temp, JSON.stringify(value, null, 2), "utf8")
+      ops.writeFile(temp, JSON.stringify(value, null, 2))
     } catch (error) {
       rmSync(temp, { force: true })
       throw error
@@ -281,17 +296,18 @@ export function createWorkSessions(dir: string, deps: WorkSessionDeps): WorkSess
           skipped.push(`${file}: the session id does not match the file name`)
           continue
         }
+        const backup = join(dir, `${result.id}.v2.json`)
+        let temp: string | null = null
         try {
-          const temp = writeAtomic(path, result)
-          try {
-            renameSync(path, join(dir, `${result.id}.v2.json`))
-            renameSync(temp, path)
-          } catch (error) {
-            rmSync(temp, { force: true })
-            throw error
-          }
+          temp = writeAtomic(path, result)
+          // The backup comes first and the swap is one atomic rename, so <id>.json is
+          // always either the old or the new content.
+          copyFileSync(path, backup)
+          renameSync(temp, path)
           migrated += 1
         } catch (error) {
+          if (temp !== null) rmSync(temp, { force: true })
+          rmSync(backup, { force: true })
           skipped.push(`${file}: ${error instanceof Error ? error.message : "could not be saved"}`)
         }
       }
@@ -330,6 +346,9 @@ export function createWorkSessions(dir: string, deps: WorkSessionDeps): WorkSess
     },
     loadScript(id, path) {
       const session = get(id)
+      if (session.lines.length > 0) {
+        throw new Error("This session already has a script.")
+      }
       const scriptText = deps.readScript(path)
       const styles = listStyles(scriptText)
       const loaded: WorkSession = {
@@ -351,7 +370,11 @@ export function createWorkSessions(dir: string, deps: WorkSessionDeps): WorkSess
       return viewOf(settled)
     },
     confirmStyles(id, dialogueStyles) {
-      const confirmed = confirm(get(id), dialogueStyles)
+      const session = get(id)
+      if (session.lines.length > 0 || stylesToAsk(session) === null) {
+        throw new Error("This session already has a script.")
+      }
+      const confirmed = confirm(session, dialogueStyles)
       save(confirmed)
       return viewOf(confirmed)
     },
@@ -420,7 +443,7 @@ export function createWorkSessions(dir: string, deps: WorkSessionDeps): WorkSess
       writeFileSync(path, png)
     },
     clearFrames(id) {
-      rmSync(join(dir, id), { recursive: true, force: true })
+      rmSync(framesDir(id), { recursive: true, force: true })
     },
   }
 }

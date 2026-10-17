@@ -59,7 +59,6 @@ function StatsBody({ sessionId }: { sessionId: string }): React.JSX.Element {
     return <div className="page-body" />
   }
   const { stats, rate } = loaded
-  const { cost } = stats
   return (
     <div className="page-body">
       <div className="stat-grid">
@@ -92,9 +91,6 @@ function StatsBody({ sessionId }: { sessionId: string }): React.JSX.Element {
         />
       </div>
       <CostArea stats={stats} rate={rate} />
-      {cost.unpriced.length === 0 ? null : (
-        <p className="hint">{`Not in the total: ${cost.unpriced.join(", ")}, whose prices aren't known.`}</p>
-      )}
     </div>
   )
 }
@@ -164,13 +160,16 @@ function CostArea({ stats, rate }: { stats: SessionStats; rate: number }): React
                 <td className="num">{count(model.requests)}</td>
                 <td className="num">{count(model.input)}</td>
                 <td className="num">{count(model.output)}</td>
-                <td className="num">{model.usd === null ? "unknown" : euros(model.usd, rate)}</td>
+                <td className="num">{model.usd === null ? "Unknown" : euros(model.usd, rate)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
       <p className="hint">Costs are estimates from list prices.</p>
+      {cost.unpriced.length === 0 ? null : (
+        <p className="hint">{`Not in the total: ${cost.unpriced.join(", ")}, whose prices aren't known.`}</p>
+      )}
     </section>
   )
 }

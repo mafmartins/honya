@@ -35,8 +35,15 @@ export function SettingsPage(): React.JSX.Element {
       latest.current = { ...latest.current, ...patch }
       settings.set(latest.current)
     }
+    // A refused change goes back to what is saved, so the page never shows a value
+    // that isn't.
     act(async () => {
-      settings.set(await api.updateSettings(patch))
+      try {
+        settings.set(await api.updateSettings(patch))
+      } catch (error) {
+        settings.reload()
+        throw error
+      }
     })
   }
   const saveDefaults = (part: Partial<AppSettings["defaults"]>): void => {
@@ -330,7 +337,7 @@ function KeyEditor({
     runs.current += 1
     const run = runs.current
     setTest({ state: "testing" })
-    api.testKey(provider, key).then(
+    api.testKey(provider, key.trim()).then(
       (result) => {
         if (run === runs.current) {
           setTest(result.ok ? { state: "ok" } : { state: "failed", message: result.message })

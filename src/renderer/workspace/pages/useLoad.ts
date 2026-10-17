@@ -3,11 +3,14 @@ import { useReport } from "../../action"
 import { errorMessage } from "../../api"
 
 // Loads a value on mount and whenever `load` changes; reload() fetches it again and
-// keeps showing the old value until the new one arrives. Failures go to the error line.
+// keeps showing the old value until the new one arrives; update() changes the latest
+// value, so a reply that lands late doesn't undo a change made meanwhile. Failures go
+// to the error line.
 export function useLoad<T>(load: () => Promise<T>): {
   value: T | null
   reload: () => void
   set: (value: T) => void
+  update: (change: (current: T) => T) => void
 } {
   const report = useReport()
   const [value, setValue] = useState<T | null>(null)
@@ -33,5 +36,8 @@ export function useLoad<T>(load: () => Promise<T>): {
   const reload = useCallback(() => {
     setTick((current) => current + 1)
   }, [])
-  return { value, reload, set: setValue }
+  const update = useCallback((change: (current: T) => T) => {
+    setValue((current) => (current === null ? null : change(current)))
+  }, [])
+  return { value, reload, set: setValue, update }
 }

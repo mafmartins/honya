@@ -77,6 +77,27 @@ describe("session stats page", () => {
     expect(within(cost).getByText("Costs are estimates from list prices.")).toBeTruthy()
   })
 
+  it("lists models without a known price in the cost section", async () => {
+    const api = fakeApi({
+      sessionStats: () =>
+        Promise.resolve({
+          ...STATS,
+          cost: { ...STATS.cost, unpriced: ["mystery-model"] },
+          models: [
+            ...STATS.models,
+            { model: "mystery-model", requests: 1, input: 100, output: 50, usd: null },
+          ],
+        }),
+    })
+    renderStats(api, "s1")
+    const cost = await screen.findByRole("region", { name: "Cost" })
+    const row = (await within(cost).findByText("mystery-model", { selector: "td" })).closest("tr")
+    expect(row?.lastElementChild?.textContent).toBe("Unknown")
+    expect(
+      within(cost).getByText("Not in the total: mystery-model, whose prices aren't known."),
+    ).toBeTruthy()
+  })
+
   it("says when there is no cost yet", async () => {
     const api = fakeApi({
       sessionStats: () =>

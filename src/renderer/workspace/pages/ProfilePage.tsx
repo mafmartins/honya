@@ -242,7 +242,7 @@ function ProjectPage({
             inheritedFrom={style}
             onSave={async (rules: Rule[]) => {
               await api.saveRules(owner, rules)
-              project.set({ ...view, rules: { ...view.rules, own: rules } })
+              project.update((current) => ({ ...current, rules: { ...current.rules, own: rules } }))
             }}
           />
         </Area>
@@ -324,7 +324,7 @@ function StylePage({ variant }: { variant: Variant }): React.JSX.Element {
             inheritedFrom={null}
             onSave={async (rules: Rule[]) => {
               await api.saveRules(owner, rules)
-              style.set({ ...view, rules })
+              style.update((current) => ({ ...current, rules }))
             }}
           />
         </Area>

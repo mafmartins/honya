@@ -38,7 +38,10 @@ type Phase =
       combined: Combined
       chosen: Set<number>
       targets: Target[]
+      // Episodes that couldn't be read, with why.
       skipped: string[]
+      // Episodes that were read but couldn't be kept as references.
+      unstored: string[]
     }
 
 // Adds reference translations (finished episodes) to a project or a language style:
@@ -114,6 +117,7 @@ export function LearnPanel(props: {
     act(async () => {
       const learned: Learned[] = []
       const skipped: string[] = []
+      const unstored: string[] = []
       let added = 0
       for (const [index, episode] of episodes.entries()) {
         setPhase({
@@ -132,13 +136,19 @@ export function LearnPanel(props: {
               episode.en === null ? null : script(episode.en),
             ),
           )
-          // Kept only once read, so a failed episode can be added again without a copy.
+        } catch (error) {
+          skipped.push(`${episode.pt.name}: ${errorMessage(error)}`)
+          continue
+        }
+        // Kept only once read, so a failed episode can be added again without a copy.
+        // Its suggestions still count when storing it fails.
+        try {
           await api.addReference(props.owner, episode.pt.name, episode.pt.text, [
             ...episode.pt.dialogueStyles,
           ])
           added += 1
         } catch (error) {
-          skipped.push(`${episode.pt.name}: ${errorMessage(error)}`)
+          unstored.push(`Couldn't store ${episode.pt.name}: ${errorMessage(error)}`)
         }
       }
       if (added > 0) {
@@ -159,7 +169,7 @@ export function LearnPanel(props: {
           ),
         )
         const targets = combined.suggestions.map((): Target => "owner")
-        setPhase({ kind: "proposals", combined, chosen, targets, skipped })
+        setPhase({ kind: "proposals", combined, chosen, targets, skipped, unstored })
       } catch (error) {
         setPhase({ kind: "edit" })
         throw error
@@ -214,8 +224,18 @@ export function LearnPanel(props: {
           act(async () => {
             const style: Owner = { kind: "style", variant: props.variant }
             try {
-              for (const { rule, target } of kept) {
+              // Each saved one is unticked at once, so trying again after a failure
+              // saves only the rest and never adds a rule twice.
+              for (const { index, rule, target } of kept) {
                 await api.addRule(target === "style" ? style : props.owner, rule)
+                setPhase((current) => {
+                  if (current.kind !== "proposals") {
+                    return current
+                  }
+                  const chosen = new Set(current.chosen)
+                  chosen.delete(index)
+                  return { ...current, chosen }
+                })
               }
             } finally {
               props.onChanged()
@@ -350,13 +370,21 @@ function Proposals(props: {
   styleTarget: string | null
   onToggle: (index: number) => void
   onTarget: (index: number, target: Target) => void
-  onSave: (kept: { rule: Rule; target: Target }[]) => void
+  onSave: (kept: { index: number; rule: Rule; target: Target }[]) => void
   onDiscard: () => void
 }): React.JSX.Element {
-  const { combined, chosen, targets, skipped } = props.phase
+  const { combined, chosen, targets, skipped, unstored } = props.phase
   const several = combined.episodes > 1
-  const skippedNote =
-    skipped.length === 0 ? null : <p className="hint">{`Skipped ${skipped.join(" ")}`}</p>
+  const skippedNote = (
+    <>
+      {skipped.length === 0 ? null : <p className="hint">{`Skipped ${skipped.join(" ")}`}</p>}
+      {unstored.map((message) => (
+        <p key={message} className="field-error" role="alert">
+          {message}
+        </p>
+      ))}
+    </>
+  )
   if (combined.suggestions.length === 0) {
     return (
       <div className="learn">
@@ -432,7 +460,7 @@ function Proposals(props: {
             props.onSave(
               combined.suggestions.flatMap((suggestion, index) =>
                 chosen.has(index)
-                  ? [{ rule: suggestion.rule, target: targets[index] ?? "owner" }]
+                  ? [{ index, rule: suggestion.rule, target: targets[index] ?? "owner" }]
                   : [],
               ),
             )

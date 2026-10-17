@@ -40,6 +40,9 @@ export type WorkspaceEvent =
       message: string | null
     }
 
+// What a run reports as it goes, before the session id is added.
+type RunProgress = Omit<Extract<WorkspaceEvent, { type: "run-progress" }>, "type" | "sessionId">
+
 export interface AiServiceDeps {
   sessions: ReturnType<typeof createWorkSessions>
   completerFor(
@@ -183,13 +186,13 @@ export function createAiService(deps: AiServiceDeps): AiService {
     const id = start.id
     const cues = dialogueCues(start)
     const cueById = new Map(cues.map((cue) => [String(cue.index), cue]))
-    const progress = {
+    const progress: RunProgress = {
       index: 0,
       total: 0,
       linesDone: translatedCount(start),
       lineTotal: start.lines.length,
       activity: "",
-      indexes: [] as number[],
+      indexes: [],
     }
     const report = (activity?: string): void => {
       if (activity !== undefined) {

@@ -5,7 +5,7 @@ describe("providerError", () => {
   it("maps statuses to kinds and user messages", () => {
     expect(providerError("claude", 401, null)).toMatchObject({
       kind: "auth",
-      message: "Claude rejected the key. Replace it on Profiles.",
+      message: "Claude rejected the key. Replace it in Settings.",
     })
     expect(providerError("gpt", 403, null).kind).toBe("auth")
     expect(providerError("gemini", 429, null)).toMatchObject({

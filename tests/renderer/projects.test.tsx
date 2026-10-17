@@ -382,6 +382,58 @@ describe("project page", () => {
       ])
     })
   })
+
+  // Adds one episode and learns from it; the proposals are showing when it returns.
+  async function learnOne(refs: HTMLElement): Promise<void> {
+    fireEvent.click(
+      await within(refs).findByRole("button", { name: "Add reference translations…" }),
+    )
+    fireEvent.click(await within(refs).findByRole("button", { name: "Use these styles" }))
+    await waitFor(() => {
+      const select = within(refs).getByLabelText("Provider")
+      expect(select instanceof HTMLSelectElement && select.value).toBe("gemini")
+    })
+    fireEvent.click(within(refs).getByRole("button", { name: "Learn" }))
+  }
+
+  it("saves only the suggestions not yet saved when a save is tried again", async () => {
+    const api = learningApi()
+    let fail = true
+    const addRule = api.addRule.bind(api)
+    const spy = vi.spyOn(api, "addRule").mockImplementation((owner, rule) => {
+      if (rule.kind === "prose" && fail) {
+        fail = false
+        return Promise.reject(new Error("Disk full."))
+      }
+      return addRule(owner, rule)
+    })
+    const project = await api.createProject("Kimetsu", "pt-pt")
+    renderProfile(api, { kind: "project", id: project.id })
+    const refs = await screen.findByRole("region", { name: "Reference translations" })
+    await learnOne(refs)
+    fireEvent.click(await within(refs).findByRole("button", { name: "Save 2 suggestions" }))
+    // The glossary entry was saved before the rule failed, so only the rule is left.
+    fireEvent.click(await within(refs).findByRole("button", { name: "Save 1 suggestion" }))
+    await waitFor(async () => {
+      expect((await api.getProject(project.id)).rules.own).toEqual([
+        { kind: "glossary", source: "Hashira", pt: "Pilar" },
+        { kind: "prose", text: "Keep -san and -sama." },
+      ])
+    })
+    expect(spy).toHaveBeenCalledTimes(3)
+  })
+
+  it("says when an episode was read but couldn't be stored, and still offers its suggestions", async () => {
+    const api = learningApi()
+    vi.spyOn(api, "addReference").mockRejectedValue(new Error("Disk full."))
+    const project = await api.createProject("Kimetsu", "pt-pt")
+    renderProfile(api, { kind: "project", id: project.id })
+    const refs = await screen.findByRole("region", { name: "Reference translations" })
+    await learnOne(refs)
+    expect(await within(refs).findByText("Couldn't store ep01.pt-pt.ass: Disk full.")).toBeTruthy()
+    expect(within(refs).queryByText(/^Skipped/)).toBeNull()
+    expect(within(refs).getByRole("button", { name: "Save 2 suggestions" })).toBeTruthy()
+  })
 })
 
 describe("language style page", () => {
@@ -413,6 +465,36 @@ describe("language style page", () => {
       expect((await api.getStyle("pt-pt")).cpsLimit).toBe(15)
     })
     expect(given.onDeleted).not.toHaveBeenCalled()
+  })
+
+  it("keeps a change made while the rules were saving", async () => {
+    const api = fakeApi()
+    const saveRules = api.saveRules.bind(api)
+    let finish: () => void = () => undefined
+    vi.spyOn(api, "saveRules").mockImplementation(
+      (owner, rules) =>
+        new Promise((resolve) => {
+          finish = () => {
+            resolve(saveRules(owner, rules))
+          }
+        }),
+    )
+    renderProfile(api, { kind: "style", variant: "pt-pt" })
+    const rules = await screen.findByRole("region", { name: "Rules and glossary" })
+    fireEvent.change(within(rules).getByLabelText("New rule"), { target: { value: "Use tu." } })
+    fireEvent.click(within(rules).getByRole("button", { name: "Add rule" }))
+    fireEvent.change(screen.getByLabelText("Characters per second"), { target: { value: "15" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save characters per second" }))
+    await waitFor(() => {
+      const input = screen.getByLabelText("Characters per second")
+      expect(input instanceof HTMLInputElement && input.value).toBe("15")
+      const save = screen.getByRole("button", { name: "Save characters per second" })
+      expect(save instanceof HTMLButtonElement && save.disabled).toBe(true)
+    })
+    finish()
+    expect(await within(rules).findByRole("button", { name: "Edit “Use tu.”" })).toBeTruthy()
+    const input = screen.getByLabelText("Characters per second")
+    expect(input instanceof HTMLInputElement && input.value).toBe("15")
   })
 
   it("saves learned suggestions to the style", async () => {

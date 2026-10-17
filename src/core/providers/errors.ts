@@ -52,7 +52,7 @@ export function providerError(
     return new ProviderError(
       "auth",
       provider,
-      `${name} rejected the key. Replace it on Profiles.`,
+      `${name} rejected the key. Replace it in Settings.`,
       status,
     )
   }

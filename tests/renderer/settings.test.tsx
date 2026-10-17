@@ -101,6 +101,31 @@ describe("settings page", () => {
     })
   })
 
+  it("goes back to the saved settings when a change is refused", async () => {
+    const api = fakeApi({
+      updateSettings: () => Promise.reject(new Error("Couldn't save the settings.")),
+    })
+    renderSettings(api)
+    const provider = await screen.findByLabelText("Default provider")
+    fireEvent.change(provider, { target: { value: "gemini" } })
+    expect(provider instanceof HTMLSelectElement && provider.value).toBe("gemini")
+    await waitFor(() => {
+      expect(provider instanceof HTMLSelectElement && provider.value).toBe("claude")
+    })
+  })
+
+  it("tests the key without the spaces around it", async () => {
+    const api = fakeApi()
+    const testKey = vi.spyOn(api, "testKey")
+    renderSettings(api)
+    await screen.findByText("GPT · no key")
+    fireEvent.click(within(keyRow("GPT · no key")).getByRole("button", { name: "Add" }))
+    fireEvent.change(screen.getByLabelText("GPT key"), { target: { value: "  sk-gpt \n" } })
+    fireEvent.click(screen.getByRole("button", { name: "Test the key" }))
+    expect(await screen.findByText("✓ GPT answered")).toBeTruthy()
+    expect(testKey).toHaveBeenCalledWith("gpt", "sk-gpt")
+  })
+
   it("chooses models from the list and resets them to the recommended ones", async () => {
     const api = fakeApi({
       getModels: (provider) => Promise.resolve(defaultModels(provider)),

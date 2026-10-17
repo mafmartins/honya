@@ -14,7 +14,12 @@ describe("fake workspace api", () => {
     await api.runAi(id)
     await expect(api.runAi(id)).rejects.toThrow("Honya is already translating.")
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(events.map((event) => event.type)).toEqual(["run-progress", "lines", "run-ended"])
+    expect(events.map((event) => event.type)).toEqual([
+      "session-changed",
+      "run-progress",
+      "lines",
+      "run-ended",
+    ])
     const view = await api.openSession(id)
     expect(view.lines[0]).toMatchObject({ words: "Olá.", origin: "manual" })
     expect(view.lines[FAKE_FLAGGED_LINE]?.flag).not.toBeNull()
@@ -32,8 +37,9 @@ describe("fake workspace api", () => {
     await expect(api.exportWrite(id, FAKE_SCRIPT_PATH, [])).rejects.toThrow(
       "Choose a different name",
     )
+    const before = events.length
     api.emitWorkspace({ type: "run-ended", sessionId: id, outcome: "stopped", message: null })
-    expect(events).toHaveLength(4)
+    expect(events).toHaveLength(before + 1)
   })
 
   it("deletes a project's sessions with it, but not during its AI run", async () => {

@@ -23,7 +23,7 @@ import {
 import type { ModelStore } from "../modelStore"
 import type { SecretStore } from "../secrets"
 import type { AppSettings, SettingsStore } from "../settingsStore"
-import type { AiService } from "../workspace/ai"
+import type { AiService, WorkspaceEvent } from "../workspace/ai"
 import type { ExportService } from "../workspace/export"
 import type { Owner, ProjectPatch, ProjectService } from "../workspace/projects"
 import type { WorkSessions } from "../workspace/sessions"
@@ -43,6 +43,7 @@ export interface WorkspaceIpcDeps {
   testKey(provider: ProviderId, key: string, model: string): Promise<KeyTestResult>
   revealLog(): void
   reveal(path: string): void
+  emit(event: WorkspaceEvent): void
 }
 
 type Handlers = Record<
@@ -75,6 +76,25 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
   let exported: string | null = null
   const offer = (path: string): void => {
     offered.add(resolve(path))
+  }
+  // Runs a change to the session and tells the page it was saved, also when the change
+  // failed after saving the spend of its request.
+  const notify = (id: string): void => {
+    deps.emit({ type: "session-changed", sessionId: id })
+  }
+  const saving = <T>(id: string, work: () => T): T => {
+    try {
+      return work()
+    } finally {
+      notify(id)
+    }
+  }
+  const savingLater = async <T>(id: string, work: () => Promise<T>): Promise<T> => {
+    try {
+      return await work()
+    } finally {
+      notify(id)
+    }
   }
   return {
     getSettings: () => settings.get(),
@@ -140,9 +160,18 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
       return path === null ? null : sessions.loadScript(id, path)
     },
     confirmStyles: (args) => sessions.confirmStyles(sessionId(args, 0), styles(args[1])),
-    editLine: (args) => sessions.edit(sessionId(args, 0), lineIndex(args, 1), text(args, 2)),
-    acceptLine: (args) => sessions.accept(sessionId(args, 0), lineIndex(args, 1)),
-    setSessionOptions: (args) => sessions.setOptions(sessionId(args, 0), sessionPatch(args[1])),
+    editLine: (args) => {
+      const id = sessionId(args, 0)
+      return saving(id, () => sessions.edit(id, lineIndex(args, 1), text(args, 2)))
+    },
+    acceptLine: (args) => {
+      const id = sessionId(args, 0)
+      return saving(id, () => sessions.accept(id, lineIndex(args, 1)))
+    },
+    setSessionOptions: (args) => {
+      const id = sessionId(args, 0)
+      return saving(id, () => sessions.setOptions(id, sessionPatch(args[1])))
+    },
     // A different video makes the cached frames wrong, so they go with the old one.
     pickVideoForSession: async (args) => {
       const id = sessionId(args, 0)
@@ -174,11 +203,19 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
         ai.stop()
       }),
     aiActive: () => ai.activeId(),
-    retranslate: (args) => ai.retranslate(sessionId(args, 0), lineIndex(args, 1), text(args, 2)),
-    draftRule: (args) => ai.draftRule(sessionId(args, 0), lineIndex(args, 1)),
+    retranslate: (args) => {
+      const id = sessionId(args, 0)
+      return savingLater(id, () => ai.retranslate(id, lineIndex(args, 1), text(args, 2)))
+    },
+    draftRule: (args) => {
+      const id = sessionId(args, 0)
+      return savingLater(id, () => ai.draftRule(id, lineIndex(args, 1)))
+    },
     lineFrame: (args) => ai.frame(sessionId(args, 0), lineIndex(args, 1)),
+    // The suggestion request's spend is saved on the session.
     exportPreview: async (args) => {
-      const preview = await exporter.preview(sessionId(args, 0))
+      const id = sessionId(args, 0)
+      const preview = await savingLater(id, () => exporter.preview(id))
       offer(preview.defaultPath)
       return preview
     },
@@ -195,7 +232,7 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
       if (!offered.has(resolve(target))) {
         throw new Error("Choose where to save with Change…")
       }
-      const { path } = exporter.write(id, target, ownedRules(args[2]))
+      const { path } = saving(id, () => exporter.write(id, target, ownedRules(args[2])))
       exported = resolve(path)
       return { path }
     },

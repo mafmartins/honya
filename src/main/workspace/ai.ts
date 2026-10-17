@@ -40,6 +40,9 @@ export type WorkspaceEvent =
       outcome: "done" | "stopped" | "failed"
       message: string | null
     }
+  // The session was saved outside a run (an edit, Accept, Ask AI again, Make a rule,
+  // export, options): its summaries load it again.
+  | { type: "session-changed"; sessionId: string }
 
 // An "Ask AI again" answer: the line as saved, and whether an edit made while the AI
 // was answering was kept instead of the AI's suggestion.

@@ -182,6 +182,7 @@ function bootWorkspace(
     reveal: (path) => {
       shell.showItemInFolder(path)
     },
+    emit: emitWorkspace,
   })
   return { ai, projects }
 }

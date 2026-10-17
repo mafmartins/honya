@@ -658,6 +658,8 @@ export function readWorkspaceEvent(value: unknown): WorkspaceEvent | null {
       }
       return { type: "run-ended", sessionId, outcome, message: value.message }
     }
+    case "session-changed":
+      return { type: "session-changed", sessionId }
     default:
       return null
   }

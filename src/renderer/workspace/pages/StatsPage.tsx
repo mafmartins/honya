@@ -23,7 +23,7 @@ export function StatsPage({ sessionId }: { sessionId: string | null }): React.JS
   )
 }
 
-// Refreshed as the AI writes lines, like the menu's summary.
+// Refreshed as the AI writes lines and the session is saved, like the menu's summary.
 function StatsBody({ sessionId }: { sessionId: string }): React.JSX.Element {
   const api = useApi()
   const report = useReport()
@@ -46,7 +46,7 @@ function StatsBody({ sessionId }: { sessionId: string }): React.JSX.Element {
     }
     load()
     const unsubscribe = api.onWorkspaceEvent((event) => {
-      if (event.sessionId === sessionId && (event.type === "lines" || event.type === "run-ended")) {
+      if (event.sessionId === sessionId && event.type !== "run-progress") {
         load()
       }
     })

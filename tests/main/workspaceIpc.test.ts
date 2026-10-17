@@ -8,7 +8,7 @@ import { workspaceHandlers } from "../../src/main/ipc/workspace"
 import { workspaceChannel } from "../../src/shared/api"
 import { createModelStore } from "../../src/main/modelStore"
 import { createSettingsStore } from "../../src/main/settingsStore"
-import { createAiService } from "../../src/main/workspace/ai"
+import { createAiService, type WorkspaceEvent } from "../../src/main/workspace/ai"
 import { createExportService } from "../../src/main/workspace/export"
 import { createProjectService } from "../../src/main/workspace/projects"
 import { createWorkSessions, type WorkSessions } from "../../src/main/workspace/sessions"
@@ -75,6 +75,7 @@ function setup(
     now: () => Date.now(),
   })
   const revealed: string[] = []
+  const events: WorkspaceEvent[] = []
   const handlers = workspaceHandlers({
     settings,
     secrets: { hasKey: (provider) => keys.includes(provider) },
@@ -90,8 +91,11 @@ function setup(
     reveal: (path) => {
       revealed.push(path)
     },
+    emit: (event) => {
+      events.push(event)
+    },
   })
-  return { handlers, projects, ai, revealed, root }
+  return { handlers, projects, ai, revealed, root, events }
 }
 
 describe("workspace ipc handlers", () => {
@@ -170,6 +174,20 @@ describe("workspace ipc handlers", () => {
     await ai.idle()
     handlers.deleteProject([project.id])
     expect(handlers.projectSessions([project.id])).toHaveLength(0)
+  })
+
+  it("tells the page when an edit, Accept, options or an export saved a session", async () => {
+    const { handlers, projects, events } = setup()
+    const project = projects.createProject("Frieren", "pt-pt")
+    const id = handlers.newSession([project.id])
+    await handlers.pickScriptForSession([id])
+    handlers.editLine([id, 0, "Olá."])
+    handlers.acceptLine([id, 0])
+    handlers.setSessionOptions([id, { preset: "best" }])
+    const preview = await handlers.exportPreview([id])
+    handlers.exportWrite([id, isPreview(preview) ? preview.defaultPath : "", []])
+    await expect(handlers.draftRule([id, 0])).rejects.toThrow()
+    expect(events).toEqual(Array(6).fill({ type: "session-changed", sessionId: id }))
   })
 
   it("writes and shows only the paths Honya handed out", async () => {

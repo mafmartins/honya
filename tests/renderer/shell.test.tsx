@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { ApiContext } from "../../src/renderer/api"
 import { ProfilePage } from "../../src/renderer/workspace/pages/ProfilePage"
@@ -102,6 +102,24 @@ describe("workspace shell", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy()
     expect(within(nav).getByRole("region", { name: "This session" })).toBeTruthy()
     expect(within(nav).getByRole("button", { name: new RegExp(FAKE_SCRIPT_NAME) })).toBeTruthy()
+  })
+
+  it("refreshes the session summary when an edit saves the session", async () => {
+    const api = fakeApi()
+    const { sessionId } = await withSession(api)
+    await renderShell(api)
+    const nav = menu()
+    fireEvent.click(await within(nav).findByRole("button", { name: /ep01\.ass/ }))
+    const box = await within(nav).findByRole("region", { name: "This session" })
+    expect(
+      await within(box).findByText(`0 of ${String(FAKE_SCRIPT.length)} lines translated`),
+    ).toBeTruthy()
+    await act(async () => {
+      await api.editLine(sessionId, 0, "Olá.")
+    })
+    expect(
+      await within(box).findByText(`1 of ${String(FAKE_SCRIPT.length)} lines translated`),
+    ).toBeTruthy()
   })
 
   it("goes to Projects after deleting the open session's project", async () => {

@@ -173,7 +173,7 @@ function costLine(stats: SessionStats, rate: number): string {
 }
 
 // Lines translated, open flags and cost of the open session, refreshed as the AI
-// writes lines.
+// writes lines and whenever the session is saved.
 function SessionBox({ sessionId }: { sessionId: string }): React.JSX.Element {
   const api = useApi()
   const report = useReport()
@@ -196,7 +196,7 @@ function SessionBox({ sessionId }: { sessionId: string }): React.JSX.Element {
     }
     load()
     const unsubscribe = api.onWorkspaceEvent((event) => {
-      if (event.sessionId === sessionId && (event.type === "lines" || event.type === "run-ended")) {
+      if (event.sessionId === sessionId && event.type !== "run-progress") {
         load()
       }
     })

@@ -155,7 +155,7 @@ describe("workspace readers", () => {
     expect(readExportPreview({ ...preview, defaultPath: null })).toBeNull()
   })
 
-  it("accepts the three workspace events and rejects malformed ones", () => {
+  it("accepts the workspace events and rejects malformed ones", () => {
     const events = [
       {
         type: "run-progress",
@@ -170,6 +170,7 @@ describe("workspace readers", () => {
       { type: "lines", sessionId: "s", lines: [line] },
       { type: "run-ended", sessionId: "s", outcome: "done", message: null },
       { type: "run-ended", sessionId: "s", outcome: "failed", message: "The key was rejected." },
+      { type: "session-changed", sessionId: "s" },
     ]
     for (const event of events) {
       expect(readWorkspaceEvent(event)).toEqual(event)

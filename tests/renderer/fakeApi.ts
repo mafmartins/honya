@@ -373,6 +373,16 @@ function fakeWorkspace(keys: Set<ProviderId>): {
     }
   }
 
+  // Like main: a change saved outside a run tells the page, also when it failed.
+  const saving = <T>(id: string, work: () => T): Promise<T> => {
+    const result = attempt(work)
+    const notify = (): void => {
+      emit({ type: "session-changed", sessionId: id })
+    }
+    result.then(notify, notify)
+    return result
+  }
+
   // The run ends on a later tick, so a Stop pressed right after Run is still in time.
   const finishRun = (id: string): void => {
     const item = sessions.get(id)
@@ -569,7 +579,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
       }),
     confirmStyles: (id) => attempt(() => view(session(id))),
     editLine: (id, index, words) =>
-      attempt(() => {
+      saving(id, () => {
         const item = session(id)
         const entry = line(item, index)
         if (words.trim() === "") {
@@ -588,7 +598,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
         return lineView(entry)
       }),
     acceptLine: (id, index) =>
-      attempt(() => {
+      saving(id, () => {
         const item = session(id)
         const entry = line(item, index)
         if (entry.flag !== null) {
@@ -599,7 +609,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
         return lineView(entry)
       }),
     setSessionOptions: (id, patch) =>
-      attempt(() => {
+      saving(id, () => {
         const item = session(id)
         item.provider = patch.provider ?? item.provider
         item.preset = patch.preset ?? item.preset
@@ -649,7 +659,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
     },
     aiActive: () => Promise.resolve(active),
     retranslate: (id, index, hint) =>
-      attempt(() => {
+      saving(id, () => {
         const item = session(id)
         const entry = line(item, index)
         if (entry.flag !== null) {
@@ -664,7 +674,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
         return { line: lineView(entry), keptEdit: false }
       }),
     draftRule: (id, index) =>
-      attempt((): Rule => {
+      saving(id, (): Rule => {
         const entry = line(session(id), index)
         if (entry.words === null) {
           throw new Error("This line has no translation to learn from.")
@@ -674,7 +684,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
     lineFrame: (id) =>
       attempt(() => (session(id).videoName === null ? null : "data:image/png;base64,iVBORw0KGgo=")),
     exportPreview: (id) =>
-      attempt(() => {
+      saving(id, () => {
         const item = session(id)
         const translated = item.lines.filter((entry) => entry.words !== null)
         const manual = item.lines
@@ -704,7 +714,7 @@ function fakeWorkspace(keys: Set<ProviderId>): {
       return Promise.resolve(defaultPath)
     },
     exportWrite: (id, path, rules) =>
-      attempt(() => {
+      saving(id, () => {
         const item = session(id)
         if (!offered.has(path)) {
           throw new Error("Choose where to save with Change…")

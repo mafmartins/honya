@@ -327,10 +327,11 @@ function writeModelFile(text: string): void {
 function openWindow(): void {
   const rendererPath = join(app.getAppPath(), "dist", "renderer", "index.html")
   const window = new BrowserWindow({
-    width: 1100,
-    height: 820,
-    minWidth: 760,
-    minHeight: 720,
+    width: 1280,
+    height: 800,
+    minWidth: 1200,
+    minHeight: 760,
+    show: false,
     title: "Honya",
     webPreferences: {
       preload: join(app.getAppPath(), "dist", "preload.cjs"),
@@ -350,6 +351,11 @@ function openWindow(): void {
     }
   })
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
+  // Shown maximised once the first frame is ready, so it never flashes small.
+  window.once("ready-to-show", () => {
+    window.maximize()
+    window.show()
+  })
   void window.loadFile(rendererPath)
 }
 

@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client"
-import { App } from "./App"
+import { Shell } from "./workspace/Shell"
 
 const root = document.querySelector("#app")
 if (root !== null) {
-  createRoot(root).render(<App api={window.honya} />)
+  createRoot(root).render(<Shell api={window.honya} />)
 }

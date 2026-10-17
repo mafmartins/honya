@@ -4,6 +4,8 @@ import {
   compileCard,
   emptyBase,
   importExample,
+  projectFrames,
+  projectPreset,
   saveRule,
 } from "../../src/core/library/card"
 import { createMemoryStore } from "../../src/core/library/store"
@@ -84,5 +86,46 @@ describe("corrections", () => {
     expect(card.corrections).toHaveLength(20)
     expect(card.corrections?.at(-1)?.en).toBe("line 69")
     expect(compileCard(emptyBase("pt-pt"), series)).not.toHaveProperty("corrections")
+  })
+
+  it("a project's glossary entry wins over the style's for the same term", () => {
+    const base = {
+      ...emptyBase("pt-pt"),
+      rules: [
+        { kind: "glossary" as const, source: "Hashira", pt: "Hashira" },
+        { kind: "prose" as const, text: "Use tu." },
+      ],
+    }
+    const series = {
+      id: "s",
+      variant: "pt-pt" as const,
+      name: "S",
+      rules: [{ kind: "glossary" as const, source: "hashira", pt: "Pilar" }],
+    }
+    expect(compileCard(base, series).rules).toEqual([
+      { kind: "prose", text: "Use tu." },
+      { kind: "glossary", source: "hashira", pt: "Pilar" },
+    ])
+  })
+
+  it("a project's characters per second overrides the style's", () => {
+    const base = { ...emptyBase("pt-pt"), cpsLimit: 17 }
+    const series = { id: "s", variant: "pt-pt" as const, name: "S", rules: [] }
+    expect(compileCard(base, { ...series, cpsLimit: 20 }).cpsLimit).toBe(20)
+    expect(compileCard(base, series).cpsLimit).toBe(17)
+  })
+
+  it("falls back to the style's preset and frames when the project sets none", () => {
+    const series = { id: "s", variant: "pt-pt" as const, name: "S", rules: [] }
+    expect(projectPreset(series, "balanced")).toBe("balanced")
+    expect(projectPreset({ ...series, preset: "best" }, "balanced")).toBe("best")
+    expect(projectFrames(series, "none")).toBe("none")
+    expect(projectFrames({ ...series, frameSetting: "every" }, "none")).toBe("every")
+  })
+
+  it("keeps project settings when a rule is saved", () => {
+    const series = { id: "s", variant: "pt-pt" as const, name: "S", rules: [], cpsLimit: 20 }
+    const saved = saveRule(emptyBase("pt-pt"), series, { kind: "prose", text: "Use tu." }, "series")
+    expect(saved.series.cpsLimit).toBe(20)
   })
 })

@@ -1,3 +1,5 @@
+import type { Preset } from "../pipeline/types"
+
 export type Variant = "pt-pt" | "pt-br"
 
 export interface ProseRule {
@@ -34,12 +36,19 @@ export interface Correction {
   final: string
 }
 
+// Which frames of the video go to the model: none, only marked lines, or every line.
+export type FrameSetting = "none" | "marked" | "every"
+
+// A project. Its optional settings override the language style's.
 export interface SeriesProfile {
   id: string
   variant: Variant
   name: string
   rules: Rule[]
   corrections?: Correction[]
+  cpsLimit?: number
+  preset?: Preset
+  frameSetting?: FrameSetting
 }
 
 export interface StyleCard {

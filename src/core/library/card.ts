@@ -1,4 +1,13 @@
-import type { BaseProfile, Correction, Rule, SeriesProfile, StyleCard, Variant } from "./types"
+import type { Preset } from "../pipeline/types"
+import type {
+  BaseProfile,
+  Correction,
+  FrameSetting,
+  Rule,
+  SeriesProfile,
+  StyleCard,
+  Variant,
+} from "./types"
 
 const BASE_CPS_LIMIT = 17
 
@@ -37,9 +46,7 @@ export function saveRule(
       cardRevision: base.cardRevision + 1,
     },
     series: {
-      id: series.id,
-      variant: series.variant,
-      name: series.name,
+      ...series,
       rules: target === "series" ? [...series.rules, rule] : series.rules,
     },
   }
@@ -66,17 +73,32 @@ export function compileCard(base: BaseProfile, series: SeriesProfile): StyleCard
   if (base.variant !== series.variant) {
     throw new Error("base and series variants differ")
   }
+  // A project's glossary entry for a term replaces the style's entry for it.
+  const overridden = new Set(
+    series.rules.flatMap((rule) => (rule.kind === "glossary" ? [rule.source.toLowerCase()] : [])),
+  )
+  const baseRules = base.rules.filter(
+    (rule) => rule.kind !== "glossary" || !overridden.has(rule.source.toLowerCase()),
+  )
   const card: StyleCard = {
     variant: base.variant,
     seriesId: series.id,
     revision: base.cardRevision,
-    cpsLimit: base.cpsLimit,
+    cpsLimit: series.cpsLimit ?? base.cpsLimit,
     voice: base.examples.map((example) => example.text).join("\n"),
-    rules: [...base.rules, ...series.rules],
+    rules: [...baseRules, ...series.rules],
   }
   const corrections = (series.corrections ?? []).slice(-CARD_CORRECTIONS)
   if (corrections.length > 0) {
     card.corrections = corrections
   }
   return card
+}
+
+export function projectPreset(series: SeriesProfile, fallback: Preset): Preset {
+  return series.preset ?? fallback
+}
+
+export function projectFrames(series: SeriesProfile, fallback: FrameSetting): FrameSetting {
+  return series.frameSetting ?? fallback
 }

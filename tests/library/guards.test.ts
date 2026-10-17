@@ -35,4 +35,15 @@ describe("profile guards", () => {
     expect(readSeriesProfile({ ...series, name: 3 })).toBeNull()
     expect(readSeriesProfile({ ...series, variant: "pt" })).toBeNull()
   })
+
+  it("reads project settings and ignores invalid ones", () => {
+    const series = { id: "a1", variant: "pt-br", name: "Frieren", rules: [] }
+    const settings = { cpsLimit: 20, preset: "best", frameSetting: "marked" }
+    expect(readSeriesProfile({ ...series, ...settings })).toEqual({ ...series, ...settings })
+    expect(
+      readSeriesProfile({ ...series, cpsLimit: 0, preset: "x", frameSetting: "sometimes" }),
+    ).toEqual(series)
+    expect(readSeriesProfile({ ...series, cpsLimit: 61 })).toEqual(series)
+    expect(readSeriesProfile({ ...series, cpsLimit: 17.5 })).toEqual(series)
+  })
 })

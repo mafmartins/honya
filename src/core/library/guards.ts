@@ -1,4 +1,13 @@
-import type { BaseProfile, Correction, ExampleScript, Rule, SeriesProfile, Variant } from "./types"
+import type {
+  BaseProfile,
+  Correction,
+  ExampleScript,
+  FrameSetting,
+  Rule,
+  SeriesProfile,
+  Variant,
+} from "./types"
+import type { Preset } from "../pipeline/types"
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -77,7 +86,29 @@ export function readSeriesProfile(value: unknown): SeriesProfile | null {
       final: c.final,
     }))
   }
+  if (
+    typeof value.cpsLimit === "number" &&
+    Number.isInteger(value.cpsLimit) &&
+    value.cpsLimit >= 1 &&
+    value.cpsLimit <= 60
+  ) {
+    series.cpsLimit = value.cpsLimit
+  }
+  if (isPreset(value.preset)) {
+    series.preset = value.preset
+  }
+  if (isFrameSetting(value.frameSetting)) {
+    series.frameSetting = value.frameSetting
+  }
   return series
+}
+
+function isPreset(value: unknown): value is Preset {
+  return value === "save" || value === "balanced" || value === "best"
+}
+
+function isFrameSetting(value: unknown): value is FrameSetting {
+  return value === "none" || value === "marked" || value === "every"
 }
 
 function isCorrection(value: unknown): value is Correction {

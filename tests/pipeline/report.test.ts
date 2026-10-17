@@ -27,7 +27,7 @@ describe("buildReport", () => {
         [0, "Ok."],
         [1, "Hello there."],
         // Over the reading speed and longer than the English, so over the limit.
-        [2, "abcdefghij".repeat(7)],
+        [2, "abcdefghij".repeat(8)],
         [3, "See you soon."],
       ]),
       results,

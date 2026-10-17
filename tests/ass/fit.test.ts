@@ -22,11 +22,13 @@ describe("fit and notes", () => {
 
   it("allows the reading-speed budget, or about the english length when that is longer", () => {
     expect(charLimit("Hi.", 0, 2000, 17)).toBe(34)
-    // "Wait, wait, wait!" is 17 characters in half a second: far over 17 per second.
-    expect(charLimit("Wait, wait, wait!", 0, 500, 17)).toBe(19)
-    expect(tooLong("Espera, espera, espera!", "Wait, wait, wait!", 0, 500, 17)).toBe(true)
-    expect(tooLong("Espera, espera!", "Wait, wait, wait!", 0, 500, 17)).toBe(false)
-    expect(tooLong("Calma, calma, já!", "Wait, wait, wait!", 0, 500, 17)).toBe(false)
+    // 20 characters in 1.12 s is already over 17 per second; 20% more is 24, 5 more is 25.
+    expect(charLimit("Thanks for the meal!", 0, 1120, 17)).toBe(25)
+    expect(tooLong("Obrigado pela refeição!", "Thanks for the meal!", 0, 1120, 17)).toBe(false)
+    // On a long line the 20% wins: 50 characters allow 60.
+    const english = "a".repeat(50)
+    expect(charLimit(english, 0, 1000, 17)).toBe(60)
+    expect(tooLong("b".repeat(61), english, 0, 1000, 17)).toBe(true)
   })
 
   it("does not count note blocks as visible characters", () => {

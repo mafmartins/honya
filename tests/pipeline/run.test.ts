@@ -96,7 +96,7 @@ describe("runTranslation", () => {
     const strong = requests.filter((r) => r.tier === "strong")
     expect(strong.map((r) => requestedIds(r.prompt))).toEqual([["2"]])
     expect(strong[0]?.prompt).toContain("[2] the first pass gave no translation")
-    expect(strong[0]?.prompt).toContain("[1] (Tanjiro, 8) Line 1. => pt 1")
+    expect(strong[0]?.prompt).toContain("[1] (Tanjiro, 12) Line 1. => pt 1")
     expect(result.ass).toContain("forte 2")
     expect([...result.saved.strongIds]).toEqual(["2"])
   })

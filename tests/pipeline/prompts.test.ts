@@ -121,7 +121,7 @@ describe("brief", () => {
 describe("helpers", () => {
   it("budgets characters from the cue's time on screen", () => {
     expect(charBudget(cue(0, "x", "", 1.5), 17)).toBe(25)
-    expect(charBudget({ ...cue(0, "x"), endMs: 0 }, 17)).toBe(2)
+    expect(charBudget({ ...cue(0, "x"), endMs: 0 }, 17)).toBe(6)
   })
 
   it("samples a long voice evenly and keeps a short one whole", () => {

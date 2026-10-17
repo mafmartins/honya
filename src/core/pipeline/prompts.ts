@@ -103,7 +103,7 @@ export function translatorSystem(card: StyleCard, brief: string): string {
     CONVENTIONS[card.variant],
     `Short lines are where the wrong variant slips in. For example:\n${EXAMPLES[card.variant].map(([en, pt]) => `${en} => ${pt}`).join("\n")}`,
     MARKS,
-    "terms: names, places, techniques and recurring phrases you gave a fixed Portuguese form in this reply and that are not in the glossary yet; [] if none.",
+    "terms: names, places, techniques and recurring phrases you gave a fixed Portuguese form in this reply and that are not in the glossary yet; [] if none. terms may include names and terms taken from the translator's lines.",
     "Return one entry per requested id, with the same ids, and nothing but the JSON.",
   )
   const corrections = card.corrections ?? []
@@ -127,6 +127,8 @@ export function batchPrompt(
   glossary: readonly Term[],
   previous: readonly { english: string; pt: string }[],
   cpsLimit: number,
+  // The translator's own lines among the ones to translate; they stay as they are.
+  fixed: readonly { english: string; pt: string }[] = [],
 ): string {
   const parts: string[] = []
   if (glossary.length > 0) {
@@ -137,6 +139,11 @@ export function batchPrompt(
   if (previous.length > 0) {
     parts.push(
       `The lines just before, already translated (context only):\n${previous.map((p) => `${p.english} => ${p.pt}`).join("\n")}`,
+    )
+  }
+  if (fixed.length > 0) {
+    parts.push(
+      `Already translated by the translator (keep these, context only):\n${fixed.map((p) => `${p.english} => ${p.pt}`).join("\n")}`,
     )
   }
   parts.push(

@@ -2,7 +2,9 @@ import { tooLong } from "../ass/fit"
 import { appendNote } from "../ass/notes"
 import { readAss, type DialogueCue } from "../ass/script"
 import { applyTranslations } from "../ass/write"
-import type { StyleCard } from "../library/types"
+import type { FrameSetting, StyleCard } from "../library/types"
+import type { AiLine } from "../session/lines"
+import type { SessionBrief } from "../session/types"
 import { addGlossary, chunkDialogue, emptyGlossary, type Glossary } from "./batch"
 import { escalationIds } from "./escalate"
 import { lineProblems, type LineProblem } from "./lint"
@@ -77,6 +79,35 @@ export interface RunInput {
   onEvent?: (event: RunEvent) => void
 }
 
+// Translates only the lines that have no Portuguese yet, with the lines that do as
+// context. Each finished batch goes to `onBatch`; lines with no model answer are left
+// out, so a later run tries them again.
+export interface MissingInput {
+  ass: string
+  dialogueStyles: ReadonlySet<string>
+  card: StyleCard
+  preset: Preset
+  complete: Completer
+  sleep: (ms: number) => Promise<void>
+  frameSetting: FrameSetting
+  frames?: FrameProvider
+  // Lines that already have Portuguese (manual or AI), by dialogue index.
+  known: ReadonlyMap<number, string>
+  // Which of `known` the translator wrote.
+  manual: ReadonlySet<number>
+  brief: SessionBrief | null
+  glossary: { source: string; pt: string }[]
+  shouldStop: () => boolean
+  onBrief?: (brief: SessionBrief, glossary: { source: string; pt: string }[]) => void
+  onBatch: (event: {
+    index: number
+    total: number
+    lines: AiLine[]
+    glossary: { source: string; pt: string }[]
+  }) => void
+  onEvent?: (event: RunEvent) => void
+}
+
 export type FrameProvider = (ids: readonly string[]) => Promise<ReadonlyMap<string, Uint8Array>>
 
 export interface RunResult {
@@ -91,26 +122,41 @@ const FAILED_REASON = "tradução falhou"
 const CONTEXT_LINES = 3
 const NO_FRAMES: FrameProvider = () => Promise.resolve(new Map())
 
-type FrameSetting = "none" | "marked" | "every"
 type FrameImage = { id: string; bytes: Uint8Array }
 type Tier = "cheap" | "strong"
 type Answer = { lines: Map<string, LineResult>; terms: Term[] }
-type ChunkResult = { lines: LineResult[]; glossary: Glossary; strongIds: string[] }
+// What a line's answer was, before it is finished; undefined when no model answered.
+type ChunkResult = {
+  answers: { cue: DialogueCue; line: LineResult | undefined }[]
+  glossary: Glossary
+  strongIds: string[]
+}
+type Finished = { line: LineResult; note: string | null }
+
+// What every request needs from either kind of run.
+interface Engine {
+  card: StyleCard
+  preset: Preset
+  complete: Completer
+  sleep: (ms: number) => Promise<void>
+  onEvent?: (event: RunEvent) => void
+}
 
 interface BatchContext {
-  input: RunInput
+  engine: Engine
   system: string
   setting: FrameSetting
   frames: FrameProvider
   hardIds: ReadonlySet<string>
   frameIds: ReadonlySet<string>
   previous: { english: string; pt: string }[]
+  fixed: { english: string; pt: string }[]
 }
 
 export async function runTranslation(input: RunInput): Promise<RunResult> {
   const cues = dialogueCues(input)
   input.onEvent?.({ type: "brief" })
-  const brief = await requestBrief(input, cues)
+  const brief = await requestBrief(input, cues, input.frameSetting ?? "none")
   const saved: SavedRun = {
     completedBatches: 0,
     results: new Map(),
@@ -131,14 +177,106 @@ function dialogueCues(input: RunInput): DialogueCue[] {
   return readAss(input.ass).filter((cue) => input.dialogueStyles.has(cue.style))
 }
 
-async function requestBrief(
-  input: RunInput,
+export async function translateMissing(input: MissingInput): Promise<"done" | "stopped"> {
+  const cues = readAss(input.ass).filter((cue) => input.dialogueStyles.has(cue.style))
+  let glossary = addGlossary(emptyGlossary(), input.glossary)
+  let brief = input.brief
+  if (brief === null) {
+    input.onEvent?.({ type: "brief" })
+    const asked = await requestBrief(input, cues, input.frameSetting)
+    brief = { summary: asked.summary, hardIds: asked.hard, frameIds: asked.frames }
+    glossary = addGlossary(glossary, asked.terms)
+    input.onBrief?.(brief, glossary.entries)
+  }
+  const system = translatorSystem(
+    input.card,
+    brief.summary === BRIEF_UNAVAILABLE ? "" : brief.summary,
+  )
+  const hardIds = new Set(brief.hardIds)
+  const frameIds = new Set(brief.frameIds)
+  // Portuguese so far: the session's, then each batch's as it lands.
+  const pt = new Map(input.known)
+  const chunks = chunkDialogue(cues.filter((cue) => !pt.has(cue.index)))
+
+  for (const [index, chunk] of chunks.entries()) {
+    if (input.shouldStop()) {
+      return "stopped"
+    }
+    const first = chunk[0]
+    const last = chunk.at(-1)
+    if (first === undefined || last === undefined) {
+      continue
+    }
+    input.onEvent?.({ type: "batch", index: index + 1, total: chunks.length })
+    const context: BatchContext = {
+      engine: input,
+      system,
+      setting: input.frameSetting,
+      frames: input.frames ?? NO_FRAMES,
+      hardIds,
+      frameIds,
+      previous: knownBefore(cues, cues.indexOf(first), pt),
+      fixed: cues.flatMap((cue) => {
+        const words = pt.get(cue.index)
+        return input.manual.has(cue.index) &&
+          cue.index > first.index &&
+          cue.index < last.index &&
+          words !== undefined
+          ? [{ english: cue.visible, pt: words }]
+          : []
+      }),
+    }
+    const translated = await translateChunk(context, chunk, glossary)
+    glossary = translated.glossary
+    const strong = new Set(translated.strongIds)
+    const lines = translated.answers.flatMap(({ cue, line }): AiLine[] => {
+      if (line === undefined) {
+        return []
+      }
+      const done = finished(line, cue, input.card.cpsLimit, input)
+      return [
+        {
+          index: cue.index,
+          words: done.line.words,
+          flag: done.note,
+          strong: strong.has(String(cue.index)),
+        },
+      ]
+    })
+    for (const line of lines) {
+      pt.set(line.index, line.words)
+    }
+    input.onBatch({ index: index + 1, total: chunks.length, lines, glossary: glossary.entries })
+  }
+  return "done"
+}
+
+// Up to CONTEXT_LINES of the nearest lines before `position` that have Portuguese.
+function knownBefore(
   cues: readonly DialogueCue[],
+  position: number,
+  pt: ReadonlyMap<number, string>,
+): { english: string; pt: string }[] {
+  const previous: { english: string; pt: string }[] = []
+  for (let i = position - 1; i >= 0 && previous.length < CONTEXT_LINES; i -= 1) {
+    const cue = cues[i]
+    const words = cue === undefined ? undefined : pt.get(cue.index)
+    if (cue !== undefined && words !== undefined) {
+      previous.unshift({ english: cue.visible, pt: words })
+    }
+  }
+  return previous
+}
+
+async function requestBrief(
+  input: Engine,
+  cues: readonly DialogueCue[],
+  frameSetting: FrameSetting,
 ): Promise<{ summary: string; terms: Term[]; hard: string[]; frames: string[] }> {
   const unavailable = { summary: BRIEF_UNAVAILABLE, terms: [], hard: [], frames: [] }
   const reply = await input.complete({
     tier: "cheap",
-    system: briefSystem(input.card.variant, input.frameSetting === "marked"),
+    system: briefSystem(input.card.variant, frameSetting === "marked"),
     prompt: briefPrompt(cues),
     schema: BRIEF_SCHEMA,
   })
@@ -183,19 +321,23 @@ async function continueTranslation(
     }
     input.onEvent?.({ type: "batch", index: index + 1, total: chunks.length })
     const context: BatchContext = {
-      input,
+      engine: input,
       system,
       setting: input.frameSetting ?? "none",
       frames: input.frames ?? NO_FRAMES,
       hardIds: new Set(saved.hardIds),
       frameIds: new Set(saved.frameIds),
       previous: previousLines(chunks[index - 1] ?? [], results),
+      fixed: [],
     }
     const translated = await translateChunk(context, chunk, glossary)
     for (const id of translated.strongIds) {
       strongIds.add(id)
     }
-    for (const line of translated.lines) {
+    const lines = translated.answers.map(({ cue, line }) =>
+      line === undefined ? englishFailure(cue) : finishLine(line, cue, input.card.cpsLimit, input),
+    )
+    for (const line of lines) {
       results.set(line.id, line)
     }
     glossary = translated.glossary
@@ -213,7 +355,7 @@ async function continueTranslation(
       type: "batch-done",
       index: index + 1,
       total: chunks.length,
-      lines: translated.lines,
+      lines,
     })
   }
 
@@ -240,12 +382,12 @@ async function translateChunk(
   chunk: readonly DialogueCue[],
   glossary: Glossary,
 ): Promise<ChunkResult> {
-  const { input } = context
+  const input = context.engine
   const cps = input.card.cpsLimit
 
   // Cheap pass, then one more cheap try for any line it left out.
   const cheap = await ask(context, "cheap", chunk, (cues) =>
-    batchPrompt(cues, glossary.entries, context.previous, cps),
+    batchPrompt(cues, glossary.entries, context.previous, cps, context.fixed),
   )
   const missing = chunk.filter((cue) => !cheap.lines.has(String(cue.index)))
   if (missing.length > 0 && missing.length < chunk.length) {
@@ -254,7 +396,7 @@ async function translateChunk(
   if (missing.length > 0) {
     await input.sleep(0)
     const again = await ask(context, "cheap", missing, (cues) =>
-      batchPrompt(cues, glossary.entries, context.previous, cps),
+      batchPrompt(cues, glossary.entries, context.previous, cps, context.fixed),
     )
     for (const [id, line] of again.lines) {
       cheap.lines.set(id, line)
@@ -324,14 +466,14 @@ async function translateChunk(
     nextGlossary = addGlossary(nextGlossary, strong.terms)
   }
 
-  const lines = chunk.map((cue) => {
+  const answers = chunk.map((cue) => {
     const id = String(cue.index)
     // A strong answer wins; without one, the cheap draft (with its note) beats English.
     const line = (selected.has(id) ? strong.lines.get(id) : undefined) ?? cheap.lines.get(id)
-    return line === undefined ? englishFailure(cue) : finishLine(line, cue, cps, input)
+    return { cue, line }
   })
   return {
-    lines,
+    answers,
     glossary: nextGlossary,
     strongIds: escalated.map((cue) => String(cue.index)).filter((id) => strong.lines.has(id)),
   }
@@ -344,7 +486,7 @@ async function ask(
   cues: readonly DialogueCue[],
   prompt: (cues: readonly DialogueCue[]) => string,
 ): Promise<Answer> {
-  const { input } = context
+  const input = context.engine
   const images = await imagesFor(cues, context.setting, context.frames, context.frameIds)
   const request: CompletionRequest = {
     tier,
@@ -408,8 +550,16 @@ function finishLine(
   line: LineResult,
   cue: DialogueCue,
   cpsLimit: number,
-  input: RunInput,
+  input: Engine,
 ): LineResult {
+  const done = finished(line, cue, cpsLimit, input)
+  return done.note === null
+    ? done.line
+    : copyLine(done.line, appendNote(done.line.words, done.note))
+}
+
+// The line's words without a note, and the note review should show, if any.
+function finished(line: LineResult, cue: DialogueCue, cpsLimit: number, input: Engine): Finished {
   const unfit = lineUnfit(line.words, cue, cpsLimit)
   // A problem the fix request couldn't clear always shows in review.
   const problems = problemsOf(input, cue, line.words)
@@ -420,15 +570,15 @@ function finishLine(
     }
     const flagged: LineResult = { ...line, mark: line.mark === "clean" ? "mild" : line.mark }
     flagged.reason = reasons.join("; ")
-    return copyLine(flagged, appendNote(line.words, flagged.reason))
+    return { line: copyLine(flagged, line.words), note: flagged.reason }
   }
   if (line.mark === "clean" && !unfit) {
-    return copyLine(line, line.words)
+    return { line: copyLine(line, line.words), note: null }
   }
-  return copyLine(line, appendNote(line.words, noteReason(line)))
+  return { line: copyLine(line, line.words), note: noteReason(line) }
 }
 
-function problemsOf(input: RunInput, cue: DialogueCue, words: string): LineProblem[] {
+function problemsOf(input: Engine, cue: DialogueCue, words: string): LineProblem[] {
   return lineProblems(cue.visible, words, input.card.variant, input.card.rules)
 }
 
@@ -473,7 +623,7 @@ function withoutNote(words: string): string {
   return words.replace(/\s*\{note: [^}]*\}$/, "")
 }
 
-function problem(input: RunInput, tier: Tier, reason: string, excerpt?: string): void {
+function problem(input: Engine, tier: Tier, reason: string, excerpt?: string): void {
   input.onEvent?.(
     excerpt === undefined
       ? { type: "problem", tier, reason }

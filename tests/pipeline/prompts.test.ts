@@ -74,6 +74,14 @@ describe("translator instructions", () => {
   })
 })
 
+describe("translator instructions about the translator's lines", () => {
+  it("say terms may come from the translator's lines", () => {
+    expect(translatorSystem(card, "")).toContain(
+      "terms may include names and terms taken from the translator's lines.",
+    )
+  })
+})
+
 describe("batch prompt", () => {
   it("lists the glossary, context and lines with speaker and character budget", () => {
     const prompt = batchPrompt(
@@ -87,6 +95,18 @@ describe("batch prompt", () => {
         "Glossary (use these forms):\nNezuko = Nezuko",
         "The lines just before, already translated (context only):\nHow? => Como?",
         "Translate these lines. Each is [id] (speaker, budget) English:\n[4] (Tanjiro, 34) Nezuko, don't die!\n[5] (?, 34) Hold on.",
+      ].join("\n\n"),
+    )
+  })
+
+  it("lists the translator's lines as context", () => {
+    const prompt = batchPrompt([cue(4, "Hold on."), cue(6, "Now!")], [], [], 17, [
+      { english: "Wait.", pt: "Espera." },
+    ])
+    expect(prompt).toBe(
+      [
+        "Already translated by the translator (keep these, context only):\nWait. => Espera.",
+        "Translate these lines. Each is [id] (speaker, budget) English:\n[4] (Tanjiro, 34) Hold on.\n[6] (Tanjiro, 34) Now!",
       ].join("\n\n"),
     )
   })

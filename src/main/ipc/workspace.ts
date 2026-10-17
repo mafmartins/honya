@@ -79,6 +79,11 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
   }
   // Runs a change to the session and tells the page it was saved, also when the change
   // failed after saving the spend of its request.
+  const notRunning = (id: string): void => {
+    if (ai.activeId() === id) {
+      throw new Error("Stop the AI run before changing the video.")
+    }
+  }
   const notify = (id: string): void => {
     deps.emit({ type: "session-changed", sessionId: id })
   }
@@ -172,18 +177,22 @@ export function workspaceHandlers(deps: WorkspaceIpcDeps): Handlers {
       const id = sessionId(args, 0)
       return saving(id, () => sessions.setOptions(id, sessionPatch(args[1])))
     },
-    // A different video makes the cached frames wrong, so they go with the old one.
+    // A different video makes the cached frames wrong, so they go with the old one. A
+    // run grabs frames from the video, so it can't change under one.
     pickVideoForSession: async (args) => {
       const id = sessionId(args, 0)
+      notRunning(id)
       const path = await deps.open(VIDEO_FILTER)
       if (path === null) {
         return null
       }
+      notRunning(id)
       sessions.clearFrames(id)
       return sessions.attachVideo(id, path)
     },
     detachVideo: (args) => {
       const id = sessionId(args, 0)
+      notRunning(id)
       sessions.clearFrames(id)
       return sessions.attachVideo(id, null)
     },

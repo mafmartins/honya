@@ -176,6 +176,24 @@ describe("workspace ipc handlers", () => {
     expect(handlers.projectSessions([project.id])).toHaveLength(0)
   })
 
+  it("refuses to change the video while the AI runs the session", async () => {
+    let release: (reason: Error) => void = () => undefined
+    const gate = new Promise<never>((_resolve, reject) => {
+      release = reject
+    })
+    const { handlers, projects, ai } = setup([], gate)
+    const project = projects.createProject("Frieren", "pt-pt")
+    const id = handlers.newSession([project.id])
+    await handlers.pickScriptForSession([id])
+    await handlers.runAi([id])
+    const refusal = "Stop the AI run before changing the video."
+    await expect(handlers.pickVideoForSession([id])).rejects.toThrow(refusal)
+    expect(() => handlers.detachVideo([id])).toThrow(refusal)
+    release(new Error("stopped"))
+    await ai.idle()
+    expect(handlers.detachVideo([id])).toMatchObject({ videoName: null })
+  })
+
   it("tells the page when an edit, Accept, options or an export saved a session", async () => {
     const { handlers, projects, events } = setup()
     const project = projects.createProject("Frieren", "pt-pt")

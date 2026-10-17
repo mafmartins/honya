@@ -619,6 +619,9 @@ function fakeWorkspace(keys: Set<ProviderId>): {
     pickVideoForSession: (id) =>
       attempt(() => {
         const item = session(id)
+        if (active === id) {
+          throw new Error("Stop the AI run before changing the video.")
+        }
         item.videoName = "ep01.mkv"
         touch(item)
         return view(item)
@@ -626,6 +629,9 @@ function fakeWorkspace(keys: Set<ProviderId>): {
     detachVideo: (id) =>
       attempt(() => {
         const item = session(id)
+        if (active === id) {
+          throw new Error("Stop the AI run before changing the video.")
+        }
         item.videoName = null
         touch(item)
         return view(item)

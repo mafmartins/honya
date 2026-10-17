@@ -42,6 +42,19 @@ describe("fake workspace api", () => {
     expect(events).toHaveLength(before + 1)
   })
 
+  it("refuses to change the video during the session's AI run", async () => {
+    const api = fakeApi()
+    const project = await api.createProject("Frieren", "pt-pt")
+    const id = await api.newSession(project.id)
+    await api.pickScriptForSession(id)
+    await api.runAi(id)
+    const refusal = "Stop the AI run before changing the video."
+    await expect(api.pickVideoForSession(id)).rejects.toThrow(refusal)
+    await expect(api.detachVideo(id)).rejects.toThrow(refusal)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect((await api.pickVideoForSession(id))?.videoName).toBe("ep01.mkv")
+  })
+
   it("deletes a project's sessions with it, but not during its AI run", async () => {
     const api = fakeApi()
     const project = await api.createProject("Frieren", "pt-pt")

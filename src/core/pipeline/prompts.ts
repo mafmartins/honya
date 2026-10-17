@@ -129,6 +129,8 @@ export function batchPrompt(
   cpsLimit: number,
   // The translator's own lines among the ones to translate; they stay as they are.
   fixed: readonly { english: string; pt: string }[] = [],
+  // The nearest lines after the batch that already have Portuguese.
+  next: readonly { english: string; pt: string }[] = [],
 ): string {
   const parts: string[] = []
   if (glossary.length > 0) {
@@ -144,6 +146,11 @@ export function batchPrompt(
   if (fixed.length > 0) {
     parts.push(
       `Already translated by the translator (keep these, context only):\n${fixed.map((p) => `${p.english} => ${p.pt}`).join("\n")}`,
+    )
+  }
+  if (next.length > 0) {
+    parts.push(
+      `The lines just after, already translated (context only):\n${next.map((p) => `${p.english} => ${p.pt}`).join("\n")}`,
     )
   }
   parts.push(

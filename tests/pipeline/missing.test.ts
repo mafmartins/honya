@@ -125,6 +125,20 @@ describe("translateMissing", () => {
     expect(requestedIds(prompts[0] ?? "")).toEqual(["10", "11", "13", "14"])
   })
 
+  it("shows up to three known lines after the batch as context", async () => {
+    const { complete, requests } = recorded()
+    const known = knownUpTo(10)
+    for (let i = 15; i < 20; i += 1) {
+      known.set(i, `feito ${String(i)}`)
+    }
+    await translateMissing(missingInput(20, complete, { known }))
+    const prompt = linePrompts(requests)[0] ?? ""
+    expect(prompt).toContain(
+      "The lines just after, already translated (context only):\nLine 15. => feito 15\nLine 16. => feito 16\nLine 17. => feito 17\n\nTranslate",
+    )
+    expect(requestedIds(prompt)).toEqual(["10", "11", "12", "13", "14"])
+  })
+
   it("asks for the brief only when the session has none", async () => {
     const withBrief = recorded()
     await translateMissing(missingInput(5, withBrief.complete))

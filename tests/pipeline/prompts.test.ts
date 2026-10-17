@@ -99,6 +99,23 @@ describe("batch prompt", () => {
     )
   })
 
+  it("lists the known lines after the batch before the lines to translate", () => {
+    const prompt = batchPrompt(
+      [cue(4, "Hold on.")],
+      [],
+      [],
+      17,
+      [],
+      [{ english: "Run!", pt: "Corre!" }],
+    )
+    expect(prompt).toBe(
+      [
+        "The lines just after, already translated (context only):\nRun! => Corre!",
+        "Translate these lines. Each is [id] (speaker, budget) English:\n[4] (Tanjiro, 34) Hold on.",
+      ].join("\n\n"),
+    )
+  })
+
   it("lists the translator's lines as context", () => {
     const prompt = batchPrompt([cue(4, "Hold on."), cue(6, "Now!")], [], [], 17, [
       { english: "Wait.", pt: "Espera." },

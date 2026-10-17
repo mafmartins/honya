@@ -113,6 +113,7 @@ interface BatchContext {
   frameIds: ReadonlySet<string>
   previous: { english: string; pt: string }[]
   fixed: { english: string; pt: string }[]
+  next: { english: string; pt: string }[]
 }
 
 export async function translateMissing(input: MissingInput): Promise<"done" | "stopped"> {
@@ -161,6 +162,7 @@ export async function translateMissing(input: MissingInput): Promise<"done" | "s
       hardIds,
       frameIds,
       previous: knownBefore(cues, cues.indexOf(first), pt),
+      next: knownAfter(cues, cues.indexOf(last), pt),
       fixed: cues.flatMap((cue) => {
         const words = pt.get(cue.index)
         return input.manual.has(cue.index) &&
@@ -238,6 +240,7 @@ export async function retranslateLine(input: RetranslateInput): Promise<AiLine |
     frameIds: new Set(),
     previous: [],
     fixed: [],
+    next: [],
   }
   const around = (items: readonly DialogueCue[]) =>
     items.map((item) => {
@@ -282,6 +285,23 @@ function knownBefore(
   return previous
 }
 
+// Up to CONTEXT_LINES of the nearest lines after `position` that have Portuguese.
+function knownAfter(
+  cues: readonly DialogueCue[],
+  position: number,
+  pt: ReadonlyMap<number, string>,
+): { english: string; pt: string }[] {
+  const next: { english: string; pt: string }[] = []
+  for (let i = position + 1; i < cues.length && next.length < CONTEXT_LINES; i += 1) {
+    const cue = cues[i]
+    const words = cue === undefined ? undefined : pt.get(cue.index)
+    if (cue !== undefined && words !== undefined) {
+      next.push({ english: cue.visible, pt: words })
+    }
+  }
+  return next
+}
+
 async function requestBrief(
   input: Engine,
   cues: readonly DialogueCue[],
@@ -322,7 +342,7 @@ async function translateChunk(
 
   // Cheap pass, then one more cheap try for any line it left out.
   const cheap = await ask(context, "cheap", chunk, (cues) =>
-    batchPrompt(cues, glossary.entries, context.previous, cps, context.fixed),
+    batchPrompt(cues, glossary.entries, context.previous, cps, context.fixed, context.next),
   )
   const missing = chunk.filter((cue) => !cheap.lines.has(String(cue.index)))
   if (missing.length > 0 && missing.length < chunk.length) {
@@ -331,7 +351,7 @@ async function translateChunk(
   if (missing.length > 0) {
     await input.sleep(0)
     const again = await ask(context, "cheap", missing, (cues) =>
-      batchPrompt(cues, glossary.entries, context.previous, cps, context.fixed),
+      batchPrompt(cues, glossary.entries, context.previous, cps, context.fixed, context.next),
     )
     for (const [id, line] of again.lines) {
       cheap.lines.set(id, line)

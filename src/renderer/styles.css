@@ -381,15 +381,17 @@ progress {
   height: 100vh;
 }
 
+/* A column: the error line (when there is one) on top, the page taking the rest. */
 .shell-main {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .shell-main > .error-line {
+  flex: none;
   margin: 0;
   padding: var(--space-10) var(--space-20);
   border-left: var(--border-accent-width) solid var(--color-border-accent);
@@ -495,7 +497,6 @@ button.menu-item[aria-current] {
   font-size: 13px;
   font-weight: 400;
   color: var(--color-text-primary);
-  opacity: 0.7;
 }
 
 .menu-stats {
@@ -509,7 +510,9 @@ button.menu-item[aria-current] {
 }
 
 /* Page anatomy */
+/* The header stays put; only the body scrolls. */
 .page {
+  flex: 1;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;

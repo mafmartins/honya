@@ -133,7 +133,9 @@ export function Menu({
                 <button
                   type="button"
                   className="menu-item menu-recent"
-                  aria-current={item.id === sessionId ? "true" : undefined}
+                  aria-current={
+                    route.page === "session" && item.id === sessionId ? "true" : undefined
+                  }
                   onClick={() => {
                     onSwitchProject(item.projectId)
                     onNavigate({ page: "session", sessionId: item.id })

@@ -56,7 +56,10 @@ function readLine(value: unknown): LineResult | undefined {
   if (id === undefined || typeof text !== "string" || text.trim() === "") {
     return undefined
   }
-  const line: LineResult = { id, words: text, mark: readMark(value.mark) }
+  // ASS writes a line break as the two characters \N; a model sometimes sends a real
+  // newline or a lowercase \n instead.
+  const words = text.trim().replace(/\r?\n|\\n/g, "\\N")
+  const line: LineResult = { id, words, mark: readMark(value.mark) }
   const note = typeof value.note === "string" ? value.note : value.reason
   if (typeof note === "string" && note.trim() !== "") {
     line.reason = note.trim()

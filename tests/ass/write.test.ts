@@ -36,9 +36,9 @@ Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello.\\NThere.
     const { text, report } = applyTranslations(
       fixture,
       new Set(["Default"]),
-      new Map([[0, "Olá."]]),
+      new Map([[0, "Olá, tudo bem por aí?"]]),
     )
-    expect(text).toContain("Hello.\\NThere.")
-    expect(report).toEqual(["event 0: line breaks changed"])
+    expect(text).toContain(",,Olá, tudo\\Nbem por aí?")
+    expect(report).toEqual([])
   })
 })

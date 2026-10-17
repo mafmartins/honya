@@ -3,8 +3,7 @@ import { replaceWords } from "./words"
 
 type Section = 0 | 1 | 2 | 3
 
-type ReplaceOutcome =
-  { status: "ready"; raw: string } | { status: "unsafe" } | { status: "line-breaks" }
+type ReplaceOutcome = { status: "ready"; raw: string } | { status: "unsafe" }
 
 export function applyTranslations(
   original: string,
@@ -22,10 +21,6 @@ export function applyTranslations(
 
     const translated = translations.get(cue.index)
     const outcome = replaceCueWords(cue.raw, translated ?? cue.raw)
-    if (outcome.status === "line-breaks") {
-      report.push(`event ${String(cue.index)}: line breaks changed`)
-      continue
-    }
     if (outcome.status === "unsafe") {
       report.push(`event ${String(cue.index)}: tags could not be split`)
       continue
@@ -40,18 +35,11 @@ export function applyTranslations(
 }
 
 function replaceCueWords(raw: string, words: string): ReplaceOutcome {
-  try {
-    const result = replaceWords(raw, words)
-    if (!result.ok) {
-      return { status: "unsafe" }
-    }
-    return { status: "ready", raw: result.raw }
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message === "line breaks changed") {
-      return { status: "line-breaks" }
-    }
-    throw error
+  const result = replaceWords(raw, words)
+  if (!result.ok) {
+    return { status: "unsafe" }
   }
+  return { status: "ready", raw: result.raw }
 }
 
 function rewriteDialogue(

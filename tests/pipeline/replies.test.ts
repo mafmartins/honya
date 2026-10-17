@@ -62,6 +62,14 @@ describe("reading a batch reply", () => {
     })
   })
 
+  it("turns a real newline into an ass line break", () => {
+    expect(
+      readLinesReply({
+        lines: [{ id: "5", text: "Vou salvar-te,\ncuste o que custar!", mark: "clean", note: "" }],
+      }),
+    ).toMatchObject({ lines: [{ words: "Vou salvar-te,\\Ncuste o que custar!" }] })
+  })
+
   it("says why when nothing is usable", () => {
     expect(readLinesReply({ translations: [] })).toBe("the reply has no lines list")
     expect(readLinesReply({ lines: [{ id: "0" }] })).toBe("the reply has no usable line")

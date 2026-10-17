@@ -8,9 +8,7 @@ export function replaceWords(
 
   const pieces = raw.split(/(\{[^}]*\})/g)
   const originalText = pieces.filter((piece) => !isOverrideBlock(piece)).join("")
-  if (countHardBreaks(words) !== countHardBreaks(originalText)) {
-    throw new Error("line breaks changed")
-  }
+  const fitted = matchBreaks(words, countHardBreaks(originalText))
 
   const target = textTarget(pieces)
   let placed = false
@@ -20,12 +18,69 @@ export function replaceWords(
     }
     if (!placed && index === target) {
       placed = true
-      return words
+      return fitted
     }
     return ""
   })
 
   return { ok: true, raw: next.join("") }
+}
+
+// Gives `words` exactly `count` hard breaks (\N), so a line keeps the source's layout.
+// A real newline, or the soft break \n a model writes by mistake, counts as a break; missing or extra breaks are placed again at the
+// spaces nearest to even splits. A trailing {note: ...} stays after the words.
+export function matchBreaks(words: string, count: number): string {
+  const text = words.replace(/\r?\n|\\n/g, "\\N")
+  if (countHardBreaks(text) === count) {
+    return text
+  }
+  const noteAt = text.search(/\s*\{note: [^}]*\}$/)
+  const body = noteAt < 0 ? text : text.slice(0, noteAt)
+  const note = noteAt < 0 ? "" : text.slice(noteAt)
+  const flat = body
+    .split("\\N")
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .join(" ")
+  return `${placeBreaks(flat, count)}${note}`
+}
+
+function placeBreaks(text: string, count: number): string {
+  if (count === 0) {
+    return text
+  }
+  const spaces: number[] = []
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === " ") {
+      spaces.push(index)
+    }
+  }
+  const chosen: number[] = []
+  for (let k = 1; k <= count; k += 1) {
+    const goal = (text.length * k) / (count + 1)
+    let best: number | undefined
+    for (const at of spaces) {
+      if (chosen.includes(at)) {
+        continue
+      }
+      if (best === undefined || Math.abs(at - goal) < Math.abs(best - goal)) {
+        best = at
+      }
+    }
+    if (best !== undefined) {
+      chosen.push(best)
+    }
+  }
+  chosen.sort((a, b) => a - b)
+  let result = ""
+  let cursor = 0
+  for (const at of chosen) {
+    result += `${text.slice(cursor, at)}\\N`
+    cursor = at + 1
+  }
+  result += text.slice(cursor)
+  // Too few spaces for every break: the rest go at the end so the count still matches.
+  return result + "\\N".repeat(count - chosen.length)
 }
 
 function textTarget(pieces: readonly string[]): number | undefined {

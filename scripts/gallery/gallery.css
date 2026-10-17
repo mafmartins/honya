@@ -1,0 +1,33 @@
+/* Lays the app's screens out side by side; the app's own styles.css does the rest. */
+body {
+  display: block;
+  padding: 40px;
+}
+
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 56px 48px;
+  align-items: flex-start;
+}
+
+.gallery-frame {
+  width: 880px;
+}
+
+.gallery.single .gallery-frame {
+  margin: 0 auto;
+}
+
+.gallery-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.gallery.single .gallery-title {
+  display: none;
+}

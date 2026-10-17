@@ -13,5 +13,5 @@
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "tests", "scripts/ffmpeg"]
+  "include": ["src", "tests", "scripts/ffmpeg", "scripts/gallery"]
 }

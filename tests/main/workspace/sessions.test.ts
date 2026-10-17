@@ -85,12 +85,15 @@ function setup(failing = { write: false, rename: false }) {
   let clock = Date.parse("2026-01-01T00:00:00Z")
   let n = 0
   const settings = createSettingsStore({ read: () => null, write: () => {} })
+  // Projects that were deleted; every other id exists.
+  const gone = new Set<string>()
   const store = createWorkSessions(
     dir,
     {
       now: () => (clock += 1000),
       newId: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
       projectName: (id) => `Project ${id}`,
+      projectExists: (id) => !gone.has(id),
       card: () => CARD,
       readScript: (path) => {
         const text = files.get(path)
@@ -111,7 +114,7 @@ function setup(failing = { write: false, rename: false }) {
       },
     },
   )
-  return { dir, files, store }
+  return { dir, files, store, gone }
 }
 
 describe("work sessions", () => {
@@ -259,6 +262,29 @@ describe("work sessions", () => {
     expect(store.get(id).lines[0]?.words).toBe("Olá.")
     expect(readdirSync(dir).sort()).toEqual([`${id}.json`, `${id}.v2.json`, `${bad}.json`].sort())
     expect(store.migrate()).toEqual({ migrated: 0, skipped: [`${bad}.json: not valid JSON`] })
+  })
+
+  it("skips a v2 session whose project no longer exists", () => {
+    const { store, dir, gone } = setup()
+    gone.add("p9")
+    const id = "66666666-6666-4666-8666-666666666666"
+    const original = JSON.stringify(v2Session(id))
+    writeFileSync(join(dir, `${id}.json`), original)
+    expect(store.migrate()).toEqual({
+      migrated: 0,
+      skipped: [`${id}.json: its project (p9) no longer exists`],
+    })
+    expect(readFileSync(join(dir, `${id}.json`), "utf8")).toBe(original)
+  })
+
+  it("leaves sessions of a missing project out of the lists", () => {
+    const { store, gone } = setup()
+    const kept = store.create("p1")
+    store.create("p2")
+    gone.add("p2")
+    expect(store.list().map((summary) => summary.id)).toEqual([kept])
+    expect(store.recent(10).map((summary) => summary.id)).toEqual([kept])
+    expect(store.latestUnfinished()?.id).toBe(kept)
   })
 
   it("restores the original and removes the backup when the final swap fails", () => {

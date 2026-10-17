@@ -45,6 +45,14 @@ function setup(
     now: () => Date.now(),
     newId: () => crypto.randomUUID(),
     projectName: (id) => series(id).name,
+    projectExists: (id) => {
+      try {
+        series(id)
+        return true
+      } catch {
+        return false
+      }
+    },
     card: (id) => compileCard(emptyBase(series(id).variant), series(id)),
     readScript: () => SCRIPT,
     settings: () => settings.get(),

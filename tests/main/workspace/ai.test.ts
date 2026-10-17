@@ -78,6 +78,7 @@ function setup(start: WorkSession, options: Setup = {}) {
     now: () => (clock += 1000),
     newId: () => ID,
     projectName: () => "Project",
+    projectExists: () => true,
     card: () => CARD,
     readScript: () => "",
     settings: () => settings.get(),

@@ -1,10 +1,12 @@
-import { createContext, useCallback, useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { HonyaApi, LineView, SessionView } from "../../../shared/api"
 import { useReport } from "../../action"
 import { errorMessage } from "../../api"
 
 export interface SessionState {
   view: SessionView | null
+  // Why the session couldn't be opened; null while it opens or once it did.
+  failure: string | null
   setView: (view: SessionView) => void
   setLine: (line: LineView) => void
   reload: () => void
@@ -19,10 +21,24 @@ function mergeLines(view: SessionView, lines: readonly LineView[]): SessionView 
 export function useSession(api: HonyaApi, id: string): SessionState {
   const report = useReport()
   const [view, setView] = useState<SessionView | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+  // Before the first open the page itself says why it failed; afterwards the error line does.
+  const opened = useRef(false)
   const reload = useCallback((): void => {
-    api.openSession(id).then(setView, (failure: unknown) => {
-      report(errorMessage(failure))
-    })
+    api.openSession(id).then(
+      (next) => {
+        opened.current = true
+        setFailure(null)
+        setView(next)
+      },
+      (error: unknown) => {
+        if (opened.current) {
+          report(errorMessage(error))
+        } else {
+          setFailure(errorMessage(error))
+        }
+      },
+    )
   }, [api, id, report])
   useEffect(() => {
     reload()
@@ -35,7 +51,7 @@ export function useSession(api: HonyaApi, id: string): SessionState {
   const setLine = useCallback((line: LineView): void => {
     setView((current) => (current === null ? current : mergeLines(current, [line])))
   }, [])
-  return { view, setView, setLine, reload }
+  return { view, failure, setView, setLine, reload }
 }
 
 export interface RunProgress {

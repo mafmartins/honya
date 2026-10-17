@@ -98,6 +98,7 @@ function bootWorkspace(
     now: () => Date.now(),
     newId: () => randomUUID(),
     projectName: (id) => findSeries(store, id)?.name ?? "Deleted project",
+    projectExists: (id) => findSeries(store, id) !== null,
     card: (projectId) => {
       const series = requireSeries(store, projectId)
       return compileCard(store.loadBase(series.variant) ?? emptyBase(series.variant), series)

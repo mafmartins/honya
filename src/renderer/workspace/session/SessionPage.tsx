@@ -21,7 +21,14 @@ const NOT_WORKING: ReadonlySet<number> = new Set()
 
 // The session page: the empty state until a script is loaded, then the top bar, the
 // filters, the line list and the selected line's panel.
-export function SessionPage({ sessionId }: { sessionId: string | null }): React.JSX.Element {
+export function SessionPage({
+  sessionId,
+  onBack,
+}: {
+  sessionId: string | null
+  // Leaves a session that couldn't be opened for the projects page.
+  onBack?: () => void
+}): React.JSX.Element {
   if (sessionId === null) {
     return (
       <section className="page">
@@ -34,13 +41,19 @@ export function SessionPage({ sessionId }: { sessionId: string | null }): React.
       </section>
     )
   }
-  return <OpenSession key={sessionId} id={sessionId} />
+  return <OpenSession key={sessionId} id={sessionId} onBack={onBack} />
 }
 
-function OpenSession({ id }: { id: string }): React.JSX.Element {
+function OpenSession({
+  id,
+  onBack,
+}: {
+  id: string
+  onBack: (() => void) | undefined
+}): React.JSX.Element {
   const api = useApi()
   const act = useAction()
-  const { view, setView, setLine, reload } = useSession(api, id)
+  const { view, failure, setView, setLine, reload } = useSession(api, id)
   const { run, ending, start, dismiss } = useAiRun(api, id, reload)
   const { saving, status } = useSaveStatus()
   const [stopping, setStopping] = useState(false)
@@ -58,6 +71,29 @@ function OpenSession({ id }: { id: string }): React.JSX.Element {
     },
     [setView],
   )
+  if (view === null && failure !== null) {
+    return (
+      <section className="page">
+        <PageHeader title="Session" />
+        <div className="page-body">
+          <div className="empty-state" role="alert">
+            <p>Couldn't open this session.</p>
+            <p className="muted">{failure}</p>
+            <div className="line-actions">
+              <button type="button" className="primary" onClick={reload}>
+                Try again
+              </button>
+              {onBack === undefined ? null : (
+                <button type="button" onClick={onBack}>
+                  Back to projects
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
   if (view === null) {
     return (
       <section className="page">

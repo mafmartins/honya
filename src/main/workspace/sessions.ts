@@ -68,6 +68,8 @@ export interface WorkSessionDeps {
   now(): number
   newId(): string
   projectName(id: string): string
+  // False once the project was deleted outside Honya: its sessions can't open.
+  projectExists(id: string): boolean
   card(projectId: string): StyleCard
   readScript(path: string): string
   settings(): AppSettings
@@ -196,6 +198,10 @@ export function createWorkSessions(
     return sessions
   }
 
+  // The sessions whose project still exists; the others can't open, so no list shows them.
+  const openable = (): WorkSession[] =>
+    all().filter((session) => deps.projectExists(session.projectId))
+
   const summaryOf = (session: WorkSession): SessionSummary => ({
     id: session.id,
     projectId: session.projectId,
@@ -306,6 +312,10 @@ export function createWorkSessions(
         }
         if (!SESSION_ID.test(result.id) || `${result.id}.json` !== file) {
           skipped.push(`${file}: the session id does not match the file name`)
+          continue
+        }
+        if (!deps.projectExists(result.projectId)) {
+          skipped.push(`${file}: its project (${result.projectId}) no longer exists`)
           continue
         }
         const backup = join(dir, `${result.id}.v2.json`)
@@ -437,10 +447,10 @@ export function createWorkSessions(
       rmSync(pathFor(id), { force: true })
       rmSync(join(dir, id), { recursive: true, force: true })
     },
-    list: () => all().map(summaryOf).sort(newestFirst),
-    recent: (limit) => all().map(summaryOf).sort(newestFirst).slice(0, limit),
+    list: () => openable().map(summaryOf).sort(newestFirst),
+    recent: (limit) => openable().map(summaryOf).sort(newestFirst).slice(0, limit),
     latestUnfinished: () =>
-      all()
+      openable()
         .map(summaryOf)
         .filter((summary) => !summary.finished)
         .sort(newestFirst)[0] ?? null,

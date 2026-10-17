@@ -316,7 +316,14 @@ function Page({
 }): React.JSX.Element {
   switch (route.page) {
     case "session":
-      return <SessionPage sessionId={route.sessionId} />
+      return (
+        <SessionPage
+          sessionId={route.sessionId}
+          onBack={() => {
+            onNavigate({ page: "projects" })
+          }}
+        />
+      )
     case "stats":
       return <StatsPage sessionId={sessionId} />
     case "projects":

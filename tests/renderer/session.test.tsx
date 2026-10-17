@@ -76,6 +76,28 @@ function rows(): HTMLElement[] {
 }
 
 describe("session page", () => {
+  it("offers to try again or go back when the session can't be opened", async () => {
+    const api = fakeApi()
+    const id = await loadedSession(api)
+    const real = api.openSession.bind(api)
+    let fail = true
+    api.openSession = (session) =>
+      fail ? Promise.reject(new Error("That project no longer exists.")) : real(session)
+    const back = vi.fn()
+    render(
+      <ApiContext.Provider value={api}>
+        <SessionPage sessionId={id} onBack={back} />
+      </ApiContext.Provider>,
+    )
+    expect(await screen.findByText("Couldn't open this session.")).toBeTruthy()
+    expect(screen.getByText("That project no longer exists.")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Back to projects" }))
+    expect(back).toHaveBeenCalledTimes(1)
+    fail = false
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(await screen.findByRole("grid", { name: "Lines" })).toBeTruthy()
+  })
+
   it("offers Load script on an empty session and shows the lines once loaded", async () => {
     const api = fakeApi()
     const id = await emptySession(api)

@@ -24,6 +24,7 @@ The quality goal is unchanged from earlier work: good translations in the transl
 - **Quiet learning**: manual edits are collected silently and turned into rule suggestions at export.
 - **Session stats** including cost in euros.
 - **Autosave** of everything, always.
+- **Polish**: everything aligned to a consistent spacing scale and grid, with even gaps, matching edges and baselines, and a clear visual hierarchy. The app should look finished, not wired up.
 
 ## Non-goals
 

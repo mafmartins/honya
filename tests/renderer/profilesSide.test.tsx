@@ -118,3 +118,48 @@ describe("profiles series keys and models", () => {
     })
   })
 })
+
+describe("learning from a translated episode", () => {
+  it("suggests rules from an episode and saves the ones kept", async () => {
+    const api = fakeApi({
+      pickExample: () =>
+        Promise.resolve({
+          name: "ep01.pt-pt.ass",
+          text: "x",
+          styles: [{ name: "Default", guess: "dialogue" }],
+        }),
+      hasKey: (provider) => Promise.resolve(provider === "gemini"),
+    })
+    await api.createSeries("pt-pt", "Kimetsu")
+    const learn = vi.spyOn(api, "learnFromScript")
+    await openProfiles(api)
+    const series = await screen.findByRole("region", { name: "series" })
+    fireEvent.click(await within(series).findByRole("button", { name: "Kimetsu" }))
+    fireEvent.click(
+      await within(series).findByRole("button", { name: "Learn from a translated episode…" }),
+    )
+    fireEvent.click(await within(series).findByRole("button", { name: "Use these styles" }))
+    await within(series).findByText("Translated episode: ep01.pt-pt.ass")
+    await waitFor(() => {
+      const select = within(series).getByLabelText("provider")
+      expect(select instanceof HTMLSelectElement && select.value).toBe("gemini")
+    })
+    fireEvent.click(within(series).getByRole("button", { name: "Learn" }))
+    expect(
+      await within(series).findByText(
+        "Suggestions from 250 matched lines. Untick what you don't want.",
+      ),
+    ).toBeTruthy()
+    expect(learn).toHaveBeenCalledWith(
+      "pt-pt",
+      expect.any(String),
+      "gemini",
+      { text: "x", dialogueStyles: ["Default"] },
+      null,
+    )
+    fireEvent.click(within(series).getByLabelText("Keep -san and -sama."))
+    fireEvent.click(within(series).getByRole("button", { name: "Save 1 to the series" }))
+    expect(await within(series).findByText("Hashira → Pilar")).toBeTruthy()
+    expect(within(series).queryByText("Keep -san and -sama.")).toBeNull()
+  })
+})

@@ -113,6 +113,12 @@ export function fakeApi(
       bases.set(variant, saved)
       return Promise.resolve(saved)
     },
+    learnFromScript: () =>
+      Promise.resolve({
+        glossary: [{ kind: "glossary", source: "Hashira", pt: "Pilar" }],
+        rules: [{ kind: "prose", text: "Keep -san and -sama." }],
+        pairs: 250,
+      }),
     prepareTranslation: () =>
       Promise.resolve({
         styles: [{ name: "Default", guess: "dialogue" }],

@@ -6,6 +6,7 @@ import {
   readBoolean,
   readCheckResult,
   readFinishResult,
+  readLearned,
   readLoadedBase,
   readModelPair,
   readNothing,
@@ -44,6 +45,12 @@ const honya: HonyaApi = {
   saveBase: (base) => read("honya:save-base", [base], readBaseProfile),
   importExample: (variant, name, text, styles) =>
     read("honya:import-example", [variant, name, text, styles], readBaseProfile),
+  learnFromScript: (variant, seriesId, provider, portuguese, english) =>
+    read(
+      "honya:learn-from-script",
+      [variant, seriesId, provider, portuguese, english],
+      readLearned,
+    ),
   prepareTranslation: (scriptPath, variant) =>
     read("honya:translate-prepare", [scriptPath, variant], readPreparedScript),
   startTranslation: (request) => read("honya:translate-start", [request], readString),

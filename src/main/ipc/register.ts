@@ -5,16 +5,19 @@ import type { ModelStore } from "../modelStore"
 import type { SecretStore } from "../secrets"
 import { pickExample, pickScript, pickVideo, type OpenFile } from "./files"
 import type { ProfileHandlers } from "./profiles"
+import type { Learner } from "../learn"
+import type { LearnScript } from "../../core/library/learn"
 
 export interface SetupDeps {
   open: OpenFile
   secrets: SecretStore
   models: ModelStore
   profiles: ProfileHandlers
+  learner: Learner
 }
 
 export function registerSetupIpc(deps: SetupDeps): void {
-  const { open, secrets, models, profiles } = deps
+  const { open, secrets, models, profiles, learner } = deps
   handle("honya:pick-script", () => pickScript(open))
   handle("honya:pick-video", () => pickVideo(open))
   handle("honya:pick-example", () => pickExample(open))
@@ -71,6 +74,27 @@ export function registerSetupIpc(deps: SetupDeps): void {
     }
     return profiles.importExample(variant(args, 0), text(args, 1), text(args, 2), styles)
   })
+  handle("honya:learn-from-script", (args) => {
+    const portuguese = learnScript(args[3])
+    const english = args[4] === null ? null : learnScript(args[4])
+    if (portuguese === undefined || portuguese === null || english === undefined) {
+      throw new Error("Invalid script.")
+    }
+    return learner.learn(variant(args, 0), text(args, 1), provider(args, 2), portuguese, english)
+  })
+}
+
+// undefined when the value isn't a script; null is kept for "no English".
+function learnScript(value: unknown): LearnScript | null | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.text !== "string" ||
+    !Array.isArray(value.dialogueStyles) ||
+    !value.dialogueStyles.every((style) => typeof style === "string")
+  ) {
+    return undefined
+  }
+  return { text: value.text, dialogueStyles: value.dialogueStyles }
 }
 
 function handle(channel: string, run: (args: readonly unknown[]) => unknown): void {

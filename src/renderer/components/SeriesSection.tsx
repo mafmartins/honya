@@ -3,6 +3,7 @@ import type { Rule, SeriesList, SeriesSummary, Variant } from "../../shared/api"
 import { useAction, useReport } from "../action"
 import { errorMessage, useApi } from "../api"
 import { RuleEditor } from "./RuleEditor"
+import { LearnPanel } from "./LearnPanel"
 import { RuleList } from "./RuleList"
 
 export function SeriesSection({ variant }: { variant: Variant }): React.JSX.Element {
@@ -165,6 +166,13 @@ export function SeriesSection({ variant }: { variant: Variant }): React.JSX.Elem
             onAdd={(rule) => {
               saveRules([...rules, rule])
             }}
+          />
+          <LearnPanel
+            key={selected}
+            variant={variant}
+            seriesId={selected}
+            rules={rules}
+            onSave={saveRules}
           />
         </>
       )}

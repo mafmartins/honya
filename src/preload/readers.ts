@@ -3,6 +3,7 @@ import { readProposal } from "../core/review/proposal"
 import type {
   CheckResult,
   FinishResult,
+  Learned,
   LiveLine,
   LoadedBase,
   ModelPair,
@@ -429,4 +430,25 @@ function isPreset(value: unknown): value is ReviewView["preset"] {
 
 function isStringList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string")
+}
+
+export function readLearned(value: unknown): Learned | null {
+  if (!isRecord(value) || !isCount(value.pairs)) {
+    return null
+  }
+  const glossary: Learned["glossary"] = []
+  for (const item of Array.isArray(value.glossary) ? (value.glossary as readonly unknown[]) : []) {
+    if (!isRecord(item) || typeof item.source !== "string" || typeof item.pt !== "string") {
+      return null
+    }
+    glossary.push({ kind: "glossary", source: item.source, pt: item.pt })
+  }
+  const rules: Learned["rules"] = []
+  for (const item of Array.isArray(value.rules) ? (value.rules as readonly unknown[]) : []) {
+    if (!isRecord(item) || typeof item.text !== "string") {
+      return null
+    }
+    rules.push({ kind: "prose", text: item.text })
+  }
+  return { glossary, rules, pairs: value.pairs }
 }

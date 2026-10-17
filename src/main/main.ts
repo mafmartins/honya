@@ -20,6 +20,7 @@ import { registerSetupIpc } from "./ipc/register"
 import { registerTranslateIpc } from "./ipc/translate"
 import { createModelStore, type ModelStore } from "./modelStore"
 import { createSecretStore, type SecretStore } from "./secrets"
+import { createLearner } from "./learn"
 import { createReviewHandlers } from "./translate/review"
 import { createRunner, type TranslateEvent } from "./translate/runner"
 import { createSessionStore } from "./translate/session"
@@ -31,7 +32,19 @@ function boot(): void {
   const store = createFileStore(join(app.getPath("userData"), "profiles"))
   const profiles = createProfileHandlers(store)
   const sessions = createSessionStore(join(app.getPath("userData"), "sessions"))
-  registerSetupIpc({ open: openFile, secrets, models, profiles })
+  const learner = createLearner({
+    knownRules: (variant, seriesId) => [
+      ...profiles.loadBase(variant).base.rules,
+      ...profiles.loadSeriesRules(variant, seriesId),
+    ],
+    completerFor: (provider) =>
+      withRetry(
+        (request) => completeWithProvider(secrets, models, provider, request),
+        sleep,
+        () => undefined,
+      ),
+  })
+  registerSetupIpc({ open: openFile, secrets, models, profiles, learner })
   const runner = createRunner({
     sessions,
     loadCard: (variant, seriesId) => loadCard(profiles, variant, seriesId),

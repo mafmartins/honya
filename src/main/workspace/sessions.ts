@@ -99,11 +99,15 @@ export interface WorkSessions {
 
 export interface WorkSessionFileOps {
   writeFile(path: string, data: string): void
+  rename(from: string, to: string): void
 }
 
 const DEFAULT_OPS: WorkSessionFileOps = {
   writeFile(path, data) {
     writeFileSync(path, data, "utf8")
+  },
+  rename(from, to) {
+    renameSync(from, to)
   },
 }
 
@@ -150,7 +154,7 @@ export function createWorkSessions(
     const path = pathFor(session.id)
     const temp = writeAtomic(path, { ...session, updatedAt: stamp() })
     try {
-      renameSync(temp, path)
+      ops.rename(temp, path)
     } catch (error) {
       rmSync(temp, { force: true })
       throw error
@@ -298,18 +302,20 @@ export function createWorkSessions(
         }
         const backup = join(dir, `${result.id}.v2.json`)
         let temp: string | null = null
-        let createdBackup = false
+        if (existsSync(backup)) {
+          skipped.push(`${file}: a backup (${basename(backup)}) already exists`)
+          continue
+        }
         try {
           temp = writeAtomic(path, result)
           // The backup comes first and the swap is one atomic rename, so <id>.json is
           // always either the old or the new content.
-          createdBackup = !existsSync(backup)
           copyFileSync(path, backup)
-          renameSync(temp, path)
+          ops.rename(temp, path)
           migrated += 1
         } catch (error) {
           if (temp !== null) rmSync(temp, { force: true })
-          if (createdBackup) rmSync(backup, { force: true })
+          rmSync(backup, { force: true })
           skipped.push(`${file}: ${error instanceof Error ? error.message : "could not be saved"}`)
         }
       }

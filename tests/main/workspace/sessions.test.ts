@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -72,7 +79,7 @@ function v2Session(id: string) {
   }
 }
 
-function setup(failWrites = { on: false }) {
+function setup(failing = { write: false, rename: false }) {
   const dir = mkdtempSync(join(tmpdir(), "honya-sessions-"))
   const files = new Map<string, string>()
   let clock = Date.parse("2026-01-01T00:00:00Z")
@@ -95,8 +102,12 @@ function setup(failWrites = { on: false }) {
     },
     {
       writeFile: (path, data) => {
-        if (failWrites.on) throw new Error("disk full")
+        if (failing.write) throw new Error("disk full")
         writeFileSync(path, data, "utf8")
+      },
+      rename: (from, to) => {
+        if (failing.rename) throw new Error("rename failed")
+        renameSync(from, to)
       },
     },
   )
@@ -238,19 +249,44 @@ describe("work sessions", () => {
     expect(store.migrate()).toEqual({ migrated: 0, skipped: [`${bad}.json: not valid JSON`] })
   })
 
-  it("leaves a v2 file untouched and reports it when the swap fails", () => {
-    const failWrites = { on: false }
-    const { store, dir } = setup(failWrites)
+  it("restores the original and removes the backup when the final swap fails", () => {
+    const failing = { write: false, rename: false }
+    const { store, dir } = setup(failing)
     const id = "33333333-3333-4333-8333-333333333333"
     const original = JSON.stringify(v2Session(id))
     writeFileSync(join(dir, `${id}.json`), original)
-    failWrites.on = true
+    failing.rename = true
     const result = store.migrate()
     expect(result.migrated).toBe(0)
     expect(result.skipped).toHaveLength(1)
+    expect(result.skipped[0]).toMatch(new RegExp(`^${id}\\.json: rename failed`))
     expect(readFileSync(join(dir, `${id}.json`), "utf8")).toBe(original)
+    expect(readdirSync(dir)).toEqual([`${id}.json`])
+  })
+
+  it("leaves a v2 file untouched when the temp write fails", () => {
+    const failing = { write: false, rename: false }
+    const { store, dir } = setup(failing)
+    const id = "44444444-4444-4444-8444-444444444444"
+    const original = JSON.stringify(v2Session(id))
+    writeFileSync(join(dir, `${id}.json`), original)
+    failing.write = true
+    const result = store.migrate()
     expect(result.skipped[0]).toMatch(new RegExp(`^${id}\\.json: disk full`))
     expect(readdirSync(dir)).toEqual([`${id}.json`])
+  })
+
+  it("never overwrites or deletes a backup that already exists", () => {
+    const { store, dir } = setup()
+    const id = "55555555-5555-4555-8555-555555555555"
+    const original = JSON.stringify(v2Session(id))
+    writeFileSync(join(dir, `${id}.json`), original)
+    writeFileSync(join(dir, `${id}.v2.json`), "old backup")
+    const result = store.migrate()
+    expect(result.migrated).toBe(0)
+    expect(result.skipped[0]).toMatch(new RegExp(`^${id}\\.json: a backup`))
+    expect(readFileSync(join(dir, `${id}.v2.json`), "utf8")).toBe("old backup")
+    expect(readFileSync(join(dir, `${id}.json`), "utf8")).toBe(original)
   })
 
   it("refuses to load a script over an existing one or confirm styles twice", () => {

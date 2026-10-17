@@ -49,6 +49,7 @@ export interface SeriesProfile {
   cpsLimit?: number
   preset?: Preset
   frameSetting?: FrameSetting
+  examples?: ExampleScript[]
 }
 
 export interface StyleCard {

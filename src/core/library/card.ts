@@ -85,7 +85,7 @@ export function compileCard(base: BaseProfile, series: SeriesProfile): StyleCard
     seriesId: series.id,
     revision: base.cardRevision,
     cpsLimit: series.cpsLimit ?? base.cpsLimit,
-    voice: base.examples.map((example) => example.text).join("\n"),
+    voice: [...base.examples, ...(series.examples ?? [])].map((example) => example.text).join("\n"),
     rules: [...baseRules, ...series.rules],
   }
   const corrections = (series.corrections ?? []).slice(-CARD_CORRECTIONS)

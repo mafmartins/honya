@@ -7,7 +7,7 @@ import type {
   SeriesProfile,
   Variant,
 } from "./types"
-import type { Preset } from "../pipeline/types"
+import type { Preset, ProviderId } from "../pipeline/types"
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -100,15 +100,25 @@ export function readSeriesProfile(value: unknown): SeriesProfile | null {
   if (isFrameSetting(value.frameSetting)) {
     series.frameSetting = value.frameSetting
   }
+  if (value.examples !== undefined) {
+    if (!Array.isArray(value.examples) || !value.examples.every(isExample)) {
+      return null
+    }
+    series.examples = value.examples.map((example) => ({ name: example.name, text: example.text }))
+  }
   return series
 }
 
-function isPreset(value: unknown): value is Preset {
+export function isPreset(value: unknown): value is Preset {
   return value === "save" || value === "balanced" || value === "best"
 }
 
-function isFrameSetting(value: unknown): value is FrameSetting {
+export function isFrameSetting(value: unknown): value is FrameSetting {
   return value === "none" || value === "marked" || value === "every"
+}
+
+export function isProviderId(value: unknown): value is ProviderId {
+  return value === "claude" || value === "gpt" || value === "gemini" || value === "mistral"
 }
 
 function isCorrection(value: unknown): value is Correction {

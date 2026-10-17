@@ -129,3 +129,17 @@ describe("corrections", () => {
     expect(saved.series.cpsLimit).toBe(20)
   })
 })
+
+describe("style card voice with project references", () => {
+  it("joins the style's reference text, then the project's", () => {
+    const base = importExample(emptyBase("pt-pt"), "ep01.ass", "Olá.")
+    const series = {
+      id: "a",
+      variant: "pt-pt" as const,
+      name: "A",
+      rules: [],
+      examples: [{ name: "x.ass", text: "Adeus." }],
+    }
+    expect(compileCard(base, series).voice).toBe("Olá.\nAdeus.")
+  })
+})

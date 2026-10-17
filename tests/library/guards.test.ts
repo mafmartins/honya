@@ -47,3 +47,13 @@ describe("profile guards", () => {
     expect(readSeriesProfile({ ...series, cpsLimit: 17.5 })).toEqual(series)
   })
 })
+
+describe("series references", () => {
+  it("reads examples only when well formed", () => {
+    const series = { id: "a1", variant: "pt-br", name: "F", rules: [] }
+    const examples = [{ name: "a.ass", text: "Oi." }]
+    expect(readSeriesProfile({ ...series, examples })).toEqual({ ...series, examples })
+    expect(readSeriesProfile(series)).toEqual(series)
+    expect(readSeriesProfile({ ...series, examples: [{ name: 1 }] })).toBeNull()
+  })
+})

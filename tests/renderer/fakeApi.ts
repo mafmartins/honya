@@ -145,6 +145,7 @@ export function fakeApi(
           frameFailures: 1,
           unchanged: 12,
           elapsedMs: 725000,
+          cost: { usd: 0.0712, unpriced: [], input: 27965, output: 13299, requests: 14 },
           outputPath: "/s/subs.pt-pt.ass",
         },
       }),

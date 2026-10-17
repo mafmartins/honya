@@ -40,6 +40,10 @@ describe("buildReport", () => {
       frameNotes: ["event 1: frame grab failed"],
       writeReport: ["event 3: tags could not be split"],
       elapsedMs: 12345,
+      spend: [
+        { model: "gemini-3.8-flash", requests: 14, input: 27965, cached: 0, output: 13299 },
+        { model: "my-own-model", requests: 1, input: 100, cached: 0, output: 10 },
+      ],
       outputPath: "/Users/marciomartins/dev/honya/episode.pt-pt.ass",
     })
     expect(report).toEqual({
@@ -56,6 +60,13 @@ describe("buildReport", () => {
       frameFailures: 1,
       unchanged: 1,
       elapsedMs: 12345,
+      cost: {
+        usd: expect.closeTo(0.070845, 6) as number,
+        unpriced: ["my-own-model"],
+        input: 28065,
+        output: 13309,
+        requests: 15,
+      },
       outputPath: "/Users/marciomartins/dev/honya/episode.pt-pt.ass",
     })
   })

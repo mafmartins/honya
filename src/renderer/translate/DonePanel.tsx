@@ -5,6 +5,24 @@ function duration(elapsedMs: number): string {
   return `${String(Math.floor(total / 60))} min ${String(total % 60)} s`
 }
 
+type Cost = FinishResult["report"]["cost"]
+
+function tokens(count: number): string {
+  return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count)
+}
+
+// "≈ $0.07 · 14 requests, 28.0k in / 13.3k out", noting models without a known price.
+export function costText(cost: Cost): string {
+  const usage = `${String(cost.requests)} requests, ${tokens(cost.input)} tokens in / ${tokens(cost.output)} out`
+  const money =
+    cost.usd === null
+      ? "price unknown"
+      : `≈ $${cost.usd < 0.01 && cost.usd > 0 ? "<0.01" : cost.usd.toFixed(2)}`
+  const missing =
+    cost.usd !== null && cost.unpriced.length > 0 ? ` (without ${cost.unpriced.join(", ")})` : ""
+  return `${money}${missing} · ${usage}`
+}
+
 export function DonePanel(props: {
   result: FinishResult
   onReveal: () => void
@@ -34,7 +52,11 @@ export function DonePanel(props: {
   if (report.unchanged !== 0) {
     rows.push(["Events copied unchanged", String(report.unchanged)])
   }
-  rows.push(["Time", duration(report.elapsedMs)], ["Saved to", props.result.outputPath])
+  rows.push(
+    ["Cost", costText(report.cost)],
+    ["Time", duration(report.elapsedMs)],
+    ["Saved to", props.result.outputPath],
+  )
   return (
     <section className="done">
       <h2>Done</h2>
@@ -46,6 +68,7 @@ export function DonePanel(props: {
           </div>
         ))}
       </dl>
+      <p className="muted">Cost is estimated from list prices; a free tier costs nothing.</p>
       <button type="button" className="action" onClick={props.onReveal}>
         Show in Finder
       </button>

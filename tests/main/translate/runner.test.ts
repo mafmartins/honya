@@ -99,6 +99,21 @@ describe("createRunner", () => {
     expect(runner.activeId()).toBeNull()
   })
 
+  it("adds up the tokens each request used, per model", async () => {
+    const h = harness()
+    h.state.complete = async (request) => ({
+      ...(await echo(request)),
+      spent: { model: `m-${request.tier}`, usage: { input: 100, output: 10, cached: 40 } },
+    })
+    const runner = createRunner(h.deps)
+    const id = await runner.start(REQUEST)
+    await runner.idle()
+    // The brief and three batches, all on the cheap model.
+    expect(h.deps.sessions.load(id)?.spend).toEqual([
+      { model: "m-cheap", requests: 4, input: 400, output: 40, cached: 160 },
+    ])
+  })
+
   it("refuses a second start while running", async () => {
     const h = harness()
     const runner = createRunner(h.deps)

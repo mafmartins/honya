@@ -67,6 +67,7 @@ describe("done panel", () => {
     expect(row("Rules saved")).toBe("3 to the series, 1 to the base")
     expect(row("Frames")).toBe("7 used, 1 couldn't be grabbed")
     expect(row("Events copied unchanged")).toBe("12")
+    expect(row("Cost")).toBe("≈ $0.07 · 14 requests, 28.0k tokens in / 13.3k out")
     expect(row("Time")).toBe("12 min 5 s")
     expect(row("Saved to")).toBe("/s/subs.pt-pt.ass")
   })

@@ -12,7 +12,7 @@ import { join } from "node:path"
 import { isRecord, isRuleList, isVariant } from "../../core/library/guards"
 import type { Rule, StyleCard, Variant } from "../../core/library/types"
 import type { LineResult, SavedRun } from "../../core/pipeline/run"
-import type { Preset, ProviderId } from "../../core/pipeline/types"
+import type { ModelSpend, Preset, ProviderId } from "../../core/pipeline/types"
 
 export const SESSION_VERSION = 2
 
@@ -65,6 +65,8 @@ export interface TranslateSession {
   frameNotes: string[]
   framesUsed: number
   elapsedMs: number
+  // Tokens used per model, for the cost in the final report.
+  spend: ModelSpend[]
   error: string | null
 }
 
@@ -112,6 +114,10 @@ export function createSessionStore(dir: string, ops: SessionFileOps = DEFAULT_OP
 
   const readSession = (path: string): TranslateSession | null => {
     const parsed = readJson(path)
+    // Sessions saved before costs were tracked have no spend.
+    if (isRecord(parsed) && parsed.spend === undefined) {
+      parsed.spend = []
+    }
     return isTranslateSession(parsed) ? parsed : null
   }
 
@@ -234,7 +240,20 @@ function isTranslateSession(value: unknown): value is TranslateSession {
     isStringList(value.frameNotes) &&
     isFiniteNumber(value.framesUsed) &&
     isFiniteNumber(value.elapsedMs) &&
+    isUnknownArray(value.spend) &&
+    value.spend.every(isModelSpend) &&
     (value.error === null || typeof value.error === "string")
+  )
+}
+
+function isModelSpend(value: unknown): value is ModelSpend {
+  return (
+    isRecord(value) &&
+    typeof value.model === "string" &&
+    isFiniteNumber(value.requests) &&
+    isFiniteNumber(value.input) &&
+    isFiniteNumber(value.output) &&
+    isFiniteNumber(value.cached)
   )
 }
 

@@ -59,6 +59,7 @@ function session(overrides: Partial<TranslateSession> = {}): TranslateSession {
     frameNotes: [],
     framesUsed: 0,
     elapsedMs: 1200,
+    spend: [],
     error: null,
     ...overrides,
   }

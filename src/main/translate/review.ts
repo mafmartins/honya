@@ -287,6 +287,7 @@ export function createReviewHandlers(deps: ReviewDeps): ReviewHandlers {
         frameNotes: session.frameNotes,
         writeReport: written.report,
         elapsedMs: session.elapsedMs,
+        spend: session.spend,
         outputPath: session.outputPath,
       })
       session.phase = "done"

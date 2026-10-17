@@ -1,4 +1,4 @@
-import type { ProviderId } from "../pipeline/types"
+import type { ProviderId, Usage } from "../pipeline/types"
 import type { ReplySchema } from "../pipeline/schemas"
 import { ProviderError, providerError, providerName } from "./errors"
 
@@ -22,13 +22,7 @@ export interface ChatInput {
   timeoutMs?: number
 }
 
-// Tokens one request used. `output` includes thinking; `cached` is the part of `input`
-// read from the provider's prompt cache.
-export interface Usage {
-  input: number
-  output: number
-  cached: number
-}
+export type { Usage }
 
 const REQUEST_TIMEOUT_MS = 3 * 60 * 1000
 

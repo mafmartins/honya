@@ -211,14 +211,15 @@ async function completeWithProvider(
     tier: request.tier,
     usage: reply.usage,
   }
+  const spent = reply.usage === null ? {} : { spent: { model: chat.model, usage: reply.usage } }
   if ("refused" in reply) {
     logLine(callEntry({ ...call, problem: reply.reason, excerpt: reply.excerpt ?? "" }))
     return reply.excerpt === undefined
-      ? { refused: true, reason: reply.reason }
-      : { refused: true, reason: reply.reason, excerpt: reply.excerpt }
+      ? { refused: true, reason: reply.reason, ...spent }
+      : { refused: true, reason: reply.reason, excerpt: reply.excerpt, ...spent }
   }
   logLine(callEntry(call))
-  return { value: reply.value }
+  return { value: reply.value, ...spent }
 }
 
 // Every provider request (with its token counts) and every unusable reply goes to

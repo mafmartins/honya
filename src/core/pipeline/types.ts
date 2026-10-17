@@ -16,3 +16,17 @@ export interface LineResult {
   mark: "clean" | "doubt" | "hard-call" | "mild"
   reason?: string
 }
+
+// Tokens used by requests. `output` includes thinking; `cached` is the part of `input`
+// read from the provider's prompt cache.
+export interface Usage {
+  input: number
+  output: number
+  cached: number
+}
+
+// What one model used over a run.
+export interface ModelSpend extends Usage {
+  model: string
+  requests: number
+}

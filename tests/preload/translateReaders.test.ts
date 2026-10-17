@@ -110,5 +110,27 @@ describe("translate readers", () => {
     expect(readPreparedScript(prepared)).toEqual(prepared)
     expect(readPreparedScript({ ...prepared, styles: [{ name: "x", guess: "q" }] })).toBeNull()
     expect(readFinishResult({ outputPath: "/o" })).toBeNull()
+    const cost = { usd: null, unpriced: ["m"], input: 10, output: 2, requests: 1 }
+    const report = {
+      dialogueLines: 1,
+      translated: 1,
+      strongModel: 0,
+      leftInEnglish: 0,
+      overLimit: 0,
+      flags: 0,
+      editedFlags: 0,
+      acceptedAsIs: 0,
+      rulesSaved: { series: 0, base: 0 },
+      framesUsed: 0,
+      frameFailures: 0,
+      unchanged: 0,
+      elapsedMs: 5,
+      cost,
+      outputPath: "/o",
+    }
+    expect(readFinishResult({ outputPath: "/o", report })).toEqual({ outputPath: "/o", report })
+    expect(
+      readFinishResult({ outputPath: "/o", report: { ...report, cost: { ...cost, usd: "1" } } }),
+    ).toBeNull()
   })
 })

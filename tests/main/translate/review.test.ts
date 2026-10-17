@@ -101,6 +101,7 @@ function seed(id: string, seriesId: string): TranslateSession {
     frameNotes: [],
     framesUsed: 0,
     elapsedMs: 1000,
+    spend: [{ model: "claude-haiku-5-5", requests: 2, input: 3000, cached: 1000, output: 800 }],
     error: null,
   }
 }
@@ -211,6 +212,19 @@ describe("review handlers", () => {
     writeFile.mockImplementation(() => undefined)
     fixture.handlers.finish(fixture.id)
     expect(fixture.sessions.load(fixture.id)?.phase).toBe("done")
+  })
+
+  it("reports the estimated cost of the run", () => {
+    const { handlers, id } = setup()
+    handlers.accept(id, 1, null)
+    // Haiku: 2000 fresh input at $0.10, 1000 cached at $0.01, 800 output at $0.50 per million.
+    expect(handlers.finish(id).report.cost).toEqual({
+      usd: (2000 * 0.1 + 1000 * 0.01 + 800 * 0.5) / 1e6,
+      unpriced: [],
+      input: 3000,
+      output: 800,
+      requests: 2,
+    })
   })
 
   it("deletes the session's saved frames once the file is written", () => {

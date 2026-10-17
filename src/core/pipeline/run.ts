@@ -15,7 +15,7 @@ import {
 } from "./prompts"
 import { readBriefReply, readLinesReply, type Term } from "./replies"
 import { BRIEF_SCHEMA, LINES_SCHEMA, type ReplySchema } from "./schemas"
-import type { LineResult, LineSignals, Preset } from "./types"
+import type { LineResult, LineSignals, Preset, Usage } from "./types"
 
 export type { LineResult }
 
@@ -39,8 +39,13 @@ export interface CompletionRequest {
   images?: { id: string; bytes: Uint8Array }[]
 }
 
-// The parsed JSON the model returned, or why there was none.
-export type Completion = { value: unknown } | { refused: true; reason?: string; excerpt?: string }
+// The parsed JSON the model returned, or why there was none, and the tokens the
+// request used when the provider said.
+export type Completion = (
+  { value: unknown } | { refused: true; reason?: string; excerpt?: string }
+) & {
+  spent?: { model: string; usage: Usage }
+}
 
 export type Completer = (request: CompletionRequest) => Promise<Completion>
 

@@ -15,6 +15,7 @@ import {
 } from "../../core/pipeline/run"
 import type { Preset, ProviderId } from "../../core/pipeline/types"
 import { ProviderError, providerName } from "../../core/providers/errors"
+import { addSpend } from "../../core/providers/prices"
 import { fromSavedRun, toSavedRun, type SessionStore, type TranslateSession } from "./session"
 
 export interface TranslateRequest {
@@ -163,7 +164,7 @@ export function createRunner(deps: RunnerDeps): Runner {
     const english = new Map(cues.map((cue) => [String(cue.index), cue.visible]))
 
     const frames = frameProvider(session, cues, resuming)
-    const complete = deps.completerFor(session.provider, (delayMs, error) => {
+    const send = deps.completerFor(session.provider, (delayMs, error) => {
       const seconds = Math.round(delayMs / 1000)
       const text =
         error.kind === "rate-limit"
@@ -171,6 +172,13 @@ export function createRunner(deps: RunnerDeps): Runner {
           : `${providerName(error.provider)} didn't answer, retrying in ${String(seconds)} s`
       activity(session, text)
     })
+    const complete: Completer = async (request) => {
+      const reply = await send(request)
+      if (reply.spent !== undefined) {
+        session.spend = addSpend(session.spend, reply.spent.model, reply.spent.usage)
+      }
+      return reply
+    }
 
     const batchDone: { value: BatchDone | null } = { value: null }
     const takeBatch = (): BatchDone | null => batchDone.value
@@ -386,6 +394,7 @@ export function createRunner(deps: RunnerDeps): Runner {
       },
       review: { edits: {}, accepted: [], rules: [] },
       frameNotes: [],
+      spend: [],
       framesUsed: 0,
       elapsedMs: 0,
       error: null,

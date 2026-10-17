@@ -359,7 +359,9 @@ export function readFinishResult(value: unknown): FinishResult | null {
     report.elapsedMs,
   ]
   const rules = report.rulesSaved
+  const cost = readCost(report.cost)
   if (
+    cost === null ||
     !counts.every(isCount) ||
     typeof report.outputPath !== "string" ||
     !isRecord(rules) ||
@@ -384,8 +386,36 @@ export function readFinishResult(value: unknown): FinishResult | null {
       frameFailures: Number(report.frameFailures),
       unchanged: Number(report.unchanged),
       elapsedMs: Number(report.elapsedMs),
+      cost,
       outputPath: report.outputPath,
     },
+  }
+}
+
+function readCost(value: unknown): FinishResult["report"]["cost"] | null {
+  if (
+    !isRecord(value) ||
+    !(value.usd === null || isCount(value.usd)) ||
+    !Array.isArray(value.unpriced) ||
+    !isCount(value.input) ||
+    !isCount(value.output) ||
+    !isCount(value.requests)
+  ) {
+    return null
+  }
+  const unpriced: string[] = []
+  for (const model of value.unpriced as readonly unknown[]) {
+    if (typeof model !== "string") {
+      return null
+    }
+    unpriced.push(model)
+  }
+  return {
+    usd: value.usd,
+    unpriced,
+    input: value.input,
+    output: value.output,
+    requests: value.requests,
   }
 }
 

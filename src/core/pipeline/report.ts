@@ -1,6 +1,7 @@
 import { readAss } from "../ass/script"
 import { tooLong } from "../ass/fit"
-import type { LineResult } from "./types"
+import { costOf, type Cost } from "../providers/prices"
+import type { LineResult, ModelSpend } from "./types"
 
 const FAILED_REASON = "tradução falhou"
 
@@ -18,6 +19,8 @@ export interface TranslateReport {
   frameFailures: number
   unchanged: number
   elapsedMs: number
+  // Estimated from list prices and the tokens each request used.
+  cost: Cost
   outputPath: string
 }
 
@@ -35,6 +38,7 @@ export function buildReport(input: {
   frameNotes: readonly string[]
   writeReport: readonly string[]
   elapsedMs: number
+  spend: readonly ModelSpend[]
   outputPath: string
 }): TranslateReport {
   const dialogue = readAss(input.ass).filter((cue) => input.dialogueStyles.has(cue.style))
@@ -66,6 +70,7 @@ export function buildReport(input: {
     frameFailures: input.frameNotes.length,
     unchanged: input.writeReport.length,
     elapsedMs: input.elapsedMs,
+    cost: costOf(input.spend),
     outputPath: input.outputPath,
   }
 }

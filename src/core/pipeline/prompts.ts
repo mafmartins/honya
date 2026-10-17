@@ -178,6 +178,45 @@ export function escalationPrompt(
   return parts.join("\n\n")
 }
 
+export function retranslatePrompt(
+  cue: DialogueCue,
+  context: {
+    before: readonly { english: string; pt?: string }[]
+    after: readonly { english: string; pt?: string }[]
+  },
+  current: string | undefined,
+  hint: string,
+  glossary: readonly Term[],
+  cpsLimit: number,
+): string {
+  const parts: string[] = []
+  if (glossary.length > 0) {
+    parts.push(
+      `Glossary (use these forms):\n${glossary.map((t) => `${t.source} = ${t.pt}`).join("\n")}`,
+    )
+  }
+  const shown = (items: readonly { english: string; pt?: string }[]): string =>
+    items.map((p) => (p.pt === undefined ? p.english : `${p.english} => ${p.pt}`)).join("\n")
+  if (context.before.length > 0) {
+    parts.push(`The lines just before (context only):\n${shown(context.before)}`)
+  }
+  if (context.after.length > 0) {
+    parts.push(`The lines just after (context only):\n${shown(context.after)}`)
+  }
+  if (current !== undefined) {
+    parts.push(
+      `The current Portuguese for this line, which the translator wants redone:\n${current}`,
+    )
+  }
+  if (hint.trim() !== "") {
+    parts.push(`The translator asks: ${hint.trim()}`)
+  }
+  parts.push(
+    `Translate this line again, differently from the current one if it was wrong. It is [id] (speaker, budget) English:\n${cueLine(cue, cpsLimit)}`,
+  )
+  return parts.join("\n\n")
+}
+
 export function fixPrompt(
   items: readonly { cue: DialogueCue; draft: string; problems: readonly string[] }[],
   glossary: readonly Term[],

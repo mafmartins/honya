@@ -181,4 +181,16 @@ describe("translateMissing", () => {
     expect(lines.find((l) => l.index === 1)?.flag).toBe("duvidoso")
     expect(lines.find((l) => l.index === 1)?.words).toBe("pt 1")
   })
+
+  it("never asks for a manual line, even when it is not in known", async () => {
+    const { complete, requests } = recorded()
+    const input = missingInput(5, complete, {
+      known: new Map([[0, "feito 0"]]),
+      manual: new Set([2]),
+    })
+    await translateMissing(input)
+    const ids = linePrompts(requests).flatMap((prompt) => requestedIds(prompt))
+    expect(ids).not.toContain("2")
+    expect(ids).toEqual(expect.arrayContaining(["1", "3", "4"]))
+  })
 })

@@ -15,6 +15,7 @@ import {
   charBudget,
   escalationPrompt,
   fixPrompt,
+  retranslatePrompt,
   translatorSystem,
 } from "./prompts"
 import { readBriefReply, readLinesReply, type Term } from "./replies"
@@ -196,7 +197,9 @@ export async function translateMissing(input: MissingInput): Promise<"done" | "s
   const frameIds = new Set(brief.frameIds)
   // Portuguese so far: the session's, then each batch's as it lands.
   const pt = new Map(input.known)
-  const chunks = chunkDialogue(cues.filter((cue) => !pt.has(cue.index)))
+  const chunks = chunkDialogue(
+    cues.filter((cue) => !pt.has(cue.index) && !input.manual.has(cue.index)),
+  )
 
   for (const [index, chunk] of chunks.entries()) {
     if (input.shouldStop()) {
@@ -249,6 +252,76 @@ export async function translateMissing(input: MissingInput): Promise<"done" | "s
     input.onBatch({ index: index + 1, total: chunks.length, lines, glossary: glossary.entries })
   }
   return "done"
+}
+
+export interface RetranslateInput {
+  ass: string
+  dialogueStyles: ReadonlySet<string>
+  card: StyleCard
+  complete: Completer
+  index: number
+  // What the translator told the AI about this line; may be empty.
+  hint: string
+  known: ReadonlyMap<number, string>
+  brief: SessionBrief | null
+  glossary: { source: string; pt: string }[]
+  image?: Uint8Array
+}
+
+// One line again, by the strong model, with its neighbours and the translator's hint.
+// The answer is checked like any other, so it can come back flagged; null when the
+// model gave nothing usable.
+export async function retranslateLine(input: RetranslateInput): Promise<AiLine | null> {
+  const cues = readAss(input.ass).filter((cue) => input.dialogueStyles.has(cue.style))
+  const position = cues.findIndex((cue) => cue.index === input.index)
+  const cue = cues[position]
+  if (cue === undefined) {
+    return null
+  }
+  const engine: Engine = {
+    card: input.card,
+    preset: "save",
+    complete: input.complete,
+    sleep: () => Promise.resolve(),
+  }
+  const summary = input.brief?.summary ?? ""
+  const context: BatchContext = {
+    engine,
+    system: translatorSystem(input.card, summary === BRIEF_UNAVAILABLE ? "" : summary),
+    setting: input.image === undefined ? "none" : "every",
+    frames: (ids) =>
+      Promise.resolve(
+        new Map(input.image === undefined ? [] : ids.map((id) => [id, input.image as Uint8Array])),
+      ),
+    hardIds: new Set(),
+    frameIds: new Set(),
+    previous: [],
+    fixed: [],
+  }
+  const around = (items: readonly DialogueCue[]) =>
+    items.map((item) => {
+      const words = input.known.get(item.index)
+      return words === undefined ? { english: item.visible } : { english: item.visible, pt: words }
+    })
+  const answer = await ask(context, "strong", [cue], () =>
+    retranslatePrompt(
+      cue,
+      {
+        before: around(cues.slice(Math.max(0, position - CONTEXT_LINES), position)),
+        after: around(cues.slice(position + 1, position + 1 + CONTEXT_LINES)),
+      },
+      input.known.get(cue.index),
+      input.hint,
+      input.glossary,
+      input.card.cpsLimit,
+    ),
+  )
+  const line = answer.lines.get(String(cue.index))
+  if (line === undefined) {
+    return null
+  }
+  const done = finished(line, cue, input.card.cpsLimit, engine)
+  return { index: cue.index, words: done.line.words, flag: done.note, strong: true }
 }
 
 // Up to CONTEXT_LINES of the nearest lines before `position` that have Portuguese.

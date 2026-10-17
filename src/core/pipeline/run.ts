@@ -285,14 +285,13 @@ export async function retranslateLine(input: RetranslateInput): Promise<AiLine |
     sleep: () => Promise.resolve(),
   }
   const summary = input.brief?.summary ?? ""
+  const image = input.image
   const context: BatchContext = {
     engine,
     system: translatorSystem(input.card, summary === BRIEF_UNAVAILABLE ? "" : summary),
-    setting: input.image === undefined ? "none" : "every",
+    setting: image === undefined ? "none" : "every",
     frames: (ids) =>
-      Promise.resolve(
-        new Map(input.image === undefined ? [] : ids.map((id) => [id, input.image as Uint8Array])),
-      ),
+      Promise.resolve(new Map(image === undefined ? [] : ids.map((id) => [id, image]))),
     hardIds: new Set(),
     frameIds: new Set(),
     previous: [],

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import type { HonyaApi, LaunchInfo, Variant } from "../../shared/api"
+import type { AppSettings, HonyaApi, LaunchInfo, Variant } from "../../shared/api"
 import { ErrorContext } from "../action"
 import { ApiContext, errorMessage } from "../api"
 import { ErrorLine } from "../ErrorLine"
@@ -14,7 +14,9 @@ import { SessionPage } from "./session/SessionPage"
 import { SetupDialog } from "./SetupDialog"
 
 type Dialog =
-  { kind: "none" } | { kind: "setup" } | { kind: "launch"; info: LaunchInfo; variant: Variant }
+  | { kind: "none" }
+  | { kind: "setup"; settings: AppSettings }
+  | { kind: "launch"; info: LaunchInfo; variant: Variant }
 
 // The workspace: the left menu and the page for the current route. The open session
 // stays open while other pages are shown.
@@ -53,7 +55,7 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
         setDialog(
           info.setupDone
             ? { kind: "launch", info, variant: settings.defaults.variant }
-            : { kind: "setup" },
+            : { kind: "setup", settings },
         )
       },
       (failure: unknown) => {
@@ -84,14 +86,14 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
             <ErrorLine message={error} />
             <Page route={route} sessionId={sessionId} />
           </main>
-          {dialog.kind === "setup" ? <SetupDialog onDone={boot} /> : null}
+          {dialog.kind === "setup" ? <SetupDialog initial={dialog.settings} onDone={boot} /> : null}
           {dialog.kind === "launch" ? (
             <LaunchDialog
               info={dialog.info}
               defaultVariant={dialog.variant}
-              onContinue={(sessionId) => {
+              onContinue={() => {
                 const current = dialog.info.continueSession
-                if (current?.id === sessionId) {
+                if (current !== null) {
                   openSession(current.projectId, current.id)
                 }
                 setDialog({ kind: "none" })

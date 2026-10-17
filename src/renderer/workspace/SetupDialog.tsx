@@ -3,6 +3,7 @@ import {
   PRESETS,
   PROVIDERS,
   VARIANTS,
+  type AppSettings,
   type FrameSetting,
   type Preset,
   type ProviderId,
@@ -28,30 +29,48 @@ type Test =
   { state: "idle" } | { state: "testing" } | { state: "ok" } | { state: "failed"; message: string }
 
 // First-time setup: step 1 a provider and a tested key, step 2 the defaults for new projects.
-export function SetupDialog({ onDone }: { onDone: () => void }): React.JSX.Element {
+export function SetupDialog({
+  initial,
+  onDone,
+  onClose,
+}: {
+  initial: AppSettings
+  onDone: () => void
+  onClose?: () => void
+}): React.JSX.Element {
   const api = useApi()
   const [step, setStep] = useState<1 | 2>(1)
-  const [provider, setProvider] = useState<ProviderId>("claude")
+  const [provider, setProvider] = useState<ProviderId>(initial.defaultProvider)
   const [key, setKey] = useState("")
   const [test, setTest] = useState<Test>({ state: "idle" })
-  const [variant, setVariant] = useState<Variant>("pt-pt")
-  const [preset, setPreset] = useState<Preset>("save")
-  const [frameSetting, setFrameSetting] = useState<FrameSetting>("none")
+  const [variant, setVariant] = useState<Variant>(initial.defaults.variant)
+  const [preset, setPreset] = useState<Preset>(initial.defaults.preset)
+  const [frameSetting, setFrameSetting] = useState<FrameSetting>(initial.defaults.frameSetting)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  // Bumped by every run and every edit, so a result from an older run is ignored.
+  const runs = useRef(0)
   const firstField = useRef<HTMLSelectElement>(null)
   useEffect(() => {
     firstField.current?.focus()
   }, [step])
 
   const runTest = (): void => {
+    runs.current += 1
+    const run = runs.current
     setTest({ state: "testing" })
     setFailure(null)
     api.testKey(provider, key).then(
       (result) => {
+        if (run !== runs.current) {
+          return
+        }
         setTest(result.ok ? { state: "ok" } : { state: "failed", message: result.message })
       },
       (error: unknown) => {
+        if (run !== runs.current) {
+          return
+        }
         setTest({
           state: "failed",
           message: error instanceof Error ? error.message : "Something went wrong.",
@@ -74,7 +93,7 @@ export function SetupDialog({ onDone }: { onDone: () => void }): React.JSX.Eleme
   }
 
   return (
-    <Dialog title="Welcome to Honya">
+    <Dialog title="Welcome to Honya" {...(onClose === undefined ? {} : { onClose })}>
       <ol className="steps" aria-label="Steps">
         <li aria-current={step === 1 ? "step" : undefined}>1 Provider</li>
         <li aria-current={step === 2 ? "step" : undefined}>2 Defaults</li>
@@ -90,6 +109,7 @@ export function SetupDialog({ onDone }: { onDone: () => void }): React.JSX.Eleme
                 const next = PROVIDERS.find((item) => item === event.target.value)
                 if (next !== undefined) {
                   setProvider(next)
+                  runs.current += 1
                   setTest({ state: "idle" })
                 }
               }}
@@ -109,6 +129,7 @@ export function SetupDialog({ onDone }: { onDone: () => void }): React.JSX.Eleme
               value={key}
               onChange={(event) => {
                 setKey(event.target.value)
+                runs.current += 1
                 setTest({ state: "idle" })
               }}
             />

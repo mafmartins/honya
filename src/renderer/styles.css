@@ -562,7 +562,7 @@ textarea:focus-visible {
   display: grid;
   place-items: center;
   padding: var(--space-20);
-  background: rgb(42 36 32 / 35%);
+  background: color-mix(in srgb, var(--color-shadow) 35%, transparent);
 }
 
 .dialog {
@@ -626,7 +626,7 @@ button.dialog-close {
 }
 
 .test-ok {
-  color: #2f7a3b;
+  color: var(--color-text-primary);
 }
 
 .test-failed {

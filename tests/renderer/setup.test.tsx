@@ -1,21 +1,30 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ApiContext } from "../../src/renderer/api"
 import { SetupDialog } from "../../src/renderer/workspace/SetupDialog"
+import type { AppSettings } from "../../src/shared/api"
 import { fakeApi } from "./fakeApi"
 
 afterEach(() => {
   cleanup()
 })
 
+const DEFAULTS: AppSettings = {
+  setupDone: false,
+  defaultProvider: "claude",
+  defaults: { variant: "pt-pt", preset: "save", frameSetting: "none" },
+  eurRate: 0.92,
+}
+
 function open(
   api = fakeApi(),
   onDone = vi.fn(),
+  initial: AppSettings = DEFAULTS,
 ): { api: ReturnType<typeof fakeApi>; onDone: () => void } {
   render(
     <ApiContext.Provider value={api}>
-      <SetupDialog onDone={onDone} />
+      <SetupDialog initial={initial} onDone={onDone} />
     </ApiContext.Provider>,
   )
   return { api, onDone }
@@ -91,5 +100,43 @@ describe("setup dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }))
     fireEvent.click(await screen.findByRole("button", { name: "Back" }))
     expect(await screen.findByLabelText("Key")).toBeTruthy()
+  })
+
+  it("starts from the saved settings", async () => {
+    open(fakeApi(), vi.fn(), {
+      ...DEFAULTS,
+      defaultProvider: "mistral",
+      defaults: { variant: "pt-br", preset: "best", frameSetting: "every" },
+    })
+    expect(screen.getByLabelText<HTMLSelectElement>("Provider").value).toBe("mistral")
+    typeKey("sk-good")
+    fireEvent.click(screen.getByRole("button", { name: "Test the key" }))
+    await screen.findByText("✓ Mistral answered")
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }))
+    await screen.findByLabelText("Portuguese")
+    expect(screen.getByLabelText<HTMLSelectElement>("Portuguese").value).toBe("pt-br")
+    expect(screen.getByLabelText<HTMLSelectElement>("Quality").value).toBe("best")
+    expect(screen.getByLabelText<HTMLSelectElement>("Video frames").value).toBe("every")
+  })
+
+  it("ignores a test result that arrives after the key was edited", async () => {
+    const api = fakeApi()
+    let release: (() => void) | null = null
+    api.testKey = () =>
+      new Promise((resolve) => {
+        release = () => {
+          resolve({ ok: true })
+        }
+      })
+    open(api)
+    typeKey("sk-old")
+    fireEvent.click(screen.getByRole("button", { name: "Test the key" }))
+    typeKey("sk-new")
+    await act(() => {
+      release?.()
+      return Promise.resolve()
+    })
+    expect(screen.queryByText("✓ Claude answered")).toBeNull()
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(true)
   })
 })

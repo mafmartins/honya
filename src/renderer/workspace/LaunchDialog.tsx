@@ -97,7 +97,7 @@ export function LaunchDialog({
                     }}
                   >
                     <span>{project.name}</span>
-                    <span className="muted">{project.variant}</span>
+                    <span className="muted">{VARIANT_LABEL[project.variant]}</span>
                   </button>
                   <button
                     type="button"

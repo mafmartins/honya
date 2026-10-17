@@ -408,7 +408,12 @@ export function createAiService(deps: AiServiceDeps): AiService {
       const session = deps.sessions.get(sessionId)
       const cue = cueOf(session, index)
       const { complete, flush } = spending(session.provider, () => undefined)
-      const image = session.frameSetting === "none" ? null : await frameBytes(session, cue)
+      // Like a run: every line with "every", only the brief's marked lines with "marked".
+      const wantsFrame =
+        session.frameSetting === "every" ||
+        (session.frameSetting === "marked" &&
+          (session.brief?.frameIds.includes(String(index)) ?? false))
+      const image = wantsFrame ? await frameBytes(session, cue) : null
       const known = new Map<number, string>()
       for (const line of session.lines) {
         if (line.words !== null) known.set(line.index, line.words)

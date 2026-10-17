@@ -318,6 +318,19 @@ describe("AI service", () => {
     expect(saved.spend[0]?.requests).toBe(1)
   })
 
+  it("sends a frame with Ask AI again only for lines the frame setting covers", async () => {
+    const brief = { summary: "", hardIds: [], frameIds: ["2"] }
+    const marked = setup(session(4, { videoPath: "/v/ep01.mkv", frameSetting: "marked", brief }))
+    await marked.ai.retranslate(ID, 1, "")
+    expect(marked.grabs).toEqual([])
+    expect(marked.requests[0]?.images ?? []).toEqual([])
+    await marked.ai.retranslate(ID, 2, "")
+    expect(marked.grabs).toEqual([2])
+    const every = setup(session(4, { videoPath: "/v/ep01.mkv", frameSetting: "every" }))
+    await every.ai.retranslate(ID, 1, "")
+    expect(every.grabs).toEqual([1])
+  })
+
   it("drafts a rule from a line with the cheap model", async () => {
     const known: Rule[] = [{ kind: "prose", text: "Use tu." }]
     const rule = { kind: "glossary", text: "", source: "Line", pt: "Linha" }

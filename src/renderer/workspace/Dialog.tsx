@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react"
+import { CloseIcon } from "./CloseIcon"
 
 const FOCUSABLE = "button, input, select, textarea, [href], [tabindex]:not([tabindex='-1'])"
 
@@ -67,8 +68,13 @@ export function Dialog({
         </h2>
         {children}
         {onClose === undefined ? null : (
-          <button type="button" className="dialog-close" aria-label="Close" onClick={onClose}>
-            ✕
+          <button
+            type="button"
+            className="icon-button dialog-close"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <CloseIcon />
           </button>
         )}
       </div>

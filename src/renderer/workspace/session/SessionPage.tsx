@@ -16,6 +16,7 @@ import {
   useSession,
   type RunEnding,
 } from "./useSession"
+import { CloseIcon } from "../CloseIcon"
 
 const NOT_WORKING: ReadonlySet<number> = new Set()
 
@@ -245,7 +246,7 @@ function RunNote({
         </button>
       ) : null}
       <button type="button" className="icon-button" aria-label="Dismiss" onClick={onDismiss}>
-        ✕
+        <CloseIcon />
       </button>
     </div>
   )

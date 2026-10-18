@@ -16,6 +16,7 @@ import { formatRule } from "../format"
 import { providerName } from "../workspace/labels"
 import { styleName } from "../workspace/route"
 import { StyleChecklist } from "./StyleChecklist"
+import { CloseIcon } from "../workspace/CloseIcon"
 
 type Named = LearnScript & { name: string }
 
@@ -292,14 +293,14 @@ export function LearnPanel(props: {
             )}
             <button
               type="button"
-              className="icon"
+              className="icon-button"
               disabled={learning}
               aria-label={`Remove ${episode.pt.name}`}
               onClick={() => {
                 setEpisodes((current) => current.filter((_, at) => at !== index))
               }}
             >
-              ✕
+              <CloseIcon />
             </button>
           </li>
         ))}

@@ -8,6 +8,7 @@ import {
 import { ActivityLine } from "../ActivityLine"
 import { providerName } from "../labels"
 import type { RunState } from "./useSession"
+import { CloseIcon } from "../CloseIcon"
 
 const PRESET_NAME: Record<Preset, string> = { save: "Save", balanced: "Balanced", best: "Best" }
 
@@ -100,7 +101,7 @@ export function TopBar({
               aria-label="Detach video"
               onClick={onDetachVideo}
             >
-              ✕
+              <CloseIcon />
             </button>
           </span>
         )}

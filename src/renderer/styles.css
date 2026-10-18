@@ -376,6 +376,9 @@ textarea:focus-visible {
   display: grid;
   place-items: center;
   padding: var(--space-20);
+  overflow: auto;
+  /* Above sticky headers inside the page. */
+  z-index: 100;
   background: color-mix(in srgb, var(--color-shadow) 35%, transparent);
 }
 

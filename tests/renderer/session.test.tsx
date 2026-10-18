@@ -76,6 +76,18 @@ function rows(): HTMLElement[] {
 }
 
 describe("session page", () => {
+  it("shows number, time, English and Portuguese columns, without the speaker", async () => {
+    const api = fakeApi()
+    const id = await loadedSession(api)
+    open(api, id)
+    await screen.findByRole("grid", { name: "Lines" })
+    const headers = within(grid())
+      .getAllByRole("columnheader")
+      .map((header) => header.textContent)
+    expect(headers).not.toContain("Speaker")
+    expect(headers).toEqual(expect.arrayContaining(["English", "Portuguese"]))
+  })
+
   it("offers to try again or go back when the session can't be opened", async () => {
     const api = fakeApi()
     const id = await loadedSession(api)

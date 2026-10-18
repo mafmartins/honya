@@ -726,7 +726,7 @@ button.icon-button {
 
 .line-row {
   display: grid;
-  grid-template-columns: 56px 84px 120px minmax(0, 1fr) minmax(0, 1fr) 32px;
+  grid-template-columns: 56px 84px minmax(0, 1fr) minmax(0, 1fr) 32px;
   align-items: center;
   column-gap: var(--space-10);
   height: 44px;
@@ -789,7 +789,6 @@ button.icon-button {
   white-space: nowrap;
 }
 
-.line-speaker,
 .line-english {
   opacity: 0.75;
 }

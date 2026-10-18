@@ -12,7 +12,7 @@ function rowId(index: number): string {
   return `line-row-${String(index)}`
 }
 
-// The session's lines as a table: number, time, speaker, English, Portuguese and mark.
+// The session's lines as a table: number, time, English, Portuguese and mark.
 // Only the rows in view (± OVERSCAN) are in the DOM; spacers keep the scroll height.
 export function LineList({
   lines,
@@ -113,7 +113,6 @@ export function LineList({
           #
         </span>
         <span role="columnheader">Time</span>
-        <span role="columnheader">Speaker</span>
         <span role="columnheader">English</span>
         <span role="columnheader">Portuguese</span>
         <span role="columnheader" aria-label="Mark" />
@@ -164,9 +163,6 @@ function LineRow({
       </span>
       <span role="gridcell" className="line-time">
         {formatCueTime(line.start)}
-      </span>
-      <span role="gridcell" className="line-text line-speaker">
-        {line.speaker}
       </span>
       <span role="gridcell" className="line-text line-english">
         {line.english}

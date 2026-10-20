@@ -175,7 +175,7 @@ describe("work sessions", () => {
       [
         ...HEAD,
         "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Então, é por isso, Mickey.",
-        "Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,Tocas muito bem.",
+        "Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,Tocas muito\\Nbem.",
         "Dialogue: 0,0:00:05.00,0:00:06.00,Default,,0,0,0,,What do they mean?",
       ].join("\n"),
     )
@@ -190,6 +190,26 @@ describe("work sessions", () => {
     ])
     expect(store.get(id).edits).toEqual([])
     expect(view.stats.lines).toMatchObject({ manual: 2, untranslated: 1 })
+  })
+
+  it("reads a line the file had in Portuguese, saved with its breaks, on one line", () => {
+    const { store, files, dir } = setup()
+    files.set(
+      "/x/half.ass",
+      [
+        ...HEAD,
+        "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Então, é por isso, Mickey.",
+      ].join("\n"),
+    )
+    const id = store.create("p1")
+    store.loadScript(id, "/x/half.ass")
+    const path = join(dir, `${id}.json`)
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace("é por isso, Mickey", "é por isso,\\\\NMickey"),
+    )
+    expect(readFileSync(path, "utf8")).toContain("isso,\\\\NMickey")
+    expect(store.get(id).lines[0]?.words).toBe("Então, é por isso, Mickey.")
   })
 
   it("asks for styles when ambiguous, then confirms", () => {

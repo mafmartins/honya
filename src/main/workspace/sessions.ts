@@ -172,7 +172,7 @@ export function createWorkSessions(
 
   const readFile = (path: string): WorkSession | null => {
     const parsed = readJson(path)
-    return isWorkSession(parsed) ? parsed : null
+    return isWorkSession(parsed) ? flattenNoEnglish(parsed) : null
   }
 
   const get = (id: string): WorkSession => {
@@ -290,7 +290,7 @@ export function createWorkSessions(
     }
     // Lines the file already had in Portuguese count as the translator's own work.
     const translated = alreadyPortuguese(cues)
-    const visible = new Map(cues.map((cue) => [cue.index, cue.visible]))
+    const visible = new Map(cues.map((cue) => [cue.index, flatWords(cue.visible)]))
     const lines = emptyLines(cues).map((line): SessionLine => {
       const words = visible.get(line.index)
       return translated.has(line.index) && words !== undefined
@@ -521,4 +521,29 @@ function isWorkSession(value: unknown): value is WorkSession {
     Array.isArray(value.edits) &&
     Array.isArray(value.spend)
   )
+}
+
+// The words of a line on one line, the way the AI writes them: export puts the
+// script's \N breaks back.
+function flatWords(text: string): string {
+  return text
+    .split("\\N")
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .join(" ")
+}
+
+// Sessions saved before lines the file had in Portuguese were stored flat.
+function flattenNoEnglish(session: WorkSession): WorkSession {
+  if (!session.lines.some((line) => line.noEnglish === true && line.words?.includes("\\N"))) {
+    return session
+  }
+  return {
+    ...session,
+    lines: session.lines.map((line) =>
+      line.noEnglish === true && line.words !== null
+        ? { ...line, words: flatWords(line.words) }
+        : line,
+    ),
+  }
 }

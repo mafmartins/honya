@@ -71,19 +71,21 @@ const FLAGS: ReadonlyMap<number, string> = new Map([
   [16, "Tone: Urokodaki is curt with Tanjiro; “Ainda não” may read too soft."],
 ])
 
-function demoLines(translatedUpTo: number): LineView[] {
+// The first `inPortuguese` lines play a script that came with them already translated.
+function demoLines(translatedUpTo: number, inPortuguese = 0): LineView[] {
   return SCRIPT.map(([seconds, speaker, english, words, origin], index) => {
     const done = index < translatedUpTo ? words : null
+    const missing = index < inPortuguese && words !== null
     return {
       index,
       start: Math.round(seconds * 1000),
       end: Math.round((seconds + 2.1) * 1000),
       speaker,
-      english,
-      englishMissing: false,
+      english: missing ? "" : english,
+      englishMissing: missing,
       words: done,
-      origin: done === null ? null : origin,
-      flag: done === null ? null : (FLAGS.get(index) ?? null),
+      origin: done === null ? null : missing ? "manual" : origin,
+      flag: done === null || missing ? null : (FLAGS.get(index) ?? null),
       budget: Math.max(18, Math.round(english.length * 1.2)),
     }
   })
@@ -128,9 +130,14 @@ interface Demo {
 // half translated. `translatedUpTo` lines of the script have Portuguese; `running`
 // makes the AI busy on that session.
 async function demo(
-  options: { translatedUpTo?: number; running?: boolean; setupDone?: boolean } = {},
+  options: {
+    translatedUpTo?: number
+    inPortuguese?: number
+    running?: boolean
+    setupDone?: boolean
+  } = {},
 ): Promise<Demo> {
-  const lines = demoLines(options.translatedUpTo ?? 18)
+  const lines = demoLines(options.translatedUpTo ?? 18, options.inPortuguese)
   let sessionId = ""
   let projectId = ""
   const view = (): SessionView => ({
@@ -342,6 +349,7 @@ async function frames(): Promise<FrameSpec[]> {
   const launch = await demo()
   const main = await demo()
   const running = await demo({ translatedUpTo: 12, running: true })
+  const partly = await demo({ translatedUpTo: 10, inPortuguese: 10 })
   // A script whose styles Honya couldn't sort out alone.
   const styles: HonyaApi = {
     ...main.api,
@@ -443,6 +451,15 @@ async function frames(): Promise<FrameSpec[]> {
       steps: async (root) => {
         const flag = await find(root, ".line-row .line-flag")
         flag.closest<HTMLElement>(".line-row")?.click()
+      },
+    },
+    {
+      key: "session-in-portuguese",
+      title: "Session · lines the file had in Portuguese",
+      node: sessionWindow(partly, <SessionPage sessionId={partly.sessionId} />),
+      steps: async (root) => {
+        const row = await find(root, ".line-row")
+        row.click()
       },
     },
     {

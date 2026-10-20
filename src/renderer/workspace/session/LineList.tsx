@@ -164,9 +164,19 @@ function LineRow({
       <span role="gridcell" className="line-time">
         {formatCueTime(line.start)}
       </span>
-      <span role="gridcell" className="line-text line-english">
-        {line.english}
-      </span>
+      {line.englishMissing ? (
+        <span
+          role="gridcell"
+          className="line-text line-english line-missing"
+          aria-label="English not in this file"
+        >
+          —
+        </span>
+      ) : (
+        <span role="gridcell" className="line-text line-english">
+          {line.english}
+        </span>
+      )}
       <span role="gridcell" className="line-portuguese">
         {working ? (
           <span className="line-text line-missing">Translating…</span>

@@ -288,7 +288,11 @@ function LineEditor({
       <p className="line-panel-meta">{metaOf(line)}</p>
       <div className="line-field">
         <span className="field-label">English</span>
-        <p className="line-english">{line.english}</p>
+        {line.englishMissing ? (
+          <p className="muted">Not in this file. The script came with this line in Portuguese.</p>
+        ) : (
+          <p className="line-english">{line.english}</p>
+        )}
       </div>
       <div className="line-field">
         <span className="line-field-head">
@@ -346,54 +350,57 @@ function LineEditor({
           </button>
         </div>
       )}
-      <div className="line-ask">
-        <label className="line-field">
-          <span className="field-label">Hint (optional)</span>
-          <input
-            value={hint}
-            onChange={(event) => {
-              setHint(event.target.value)
-            }}
-          />
-        </label>
-        <div className="line-actions">
-          <button
-            type="button"
-            disabled={busy !== null || confirming}
-            onClick={() => {
-              // A line you wrote, or edited here (even if just saved), is yours.
-              if (line.origin === "manual" || edited.current) {
-                setConfirming(true)
-              } else {
-                ask()
-              }
-            }}
-          >
-            Ask AI again
-          </button>
-          <button type="button" disabled={busy !== null} onClick={draftRule}>
-            Make a rule…
-          </button>
-        </div>
-        {confirming ? (
-          <div className="line-confirm" role="group" aria-label="Confirm">
-            <p>This replaces your translation. Ask anyway?</p>
-            <div className="line-actions">
-              <button type="button" className="primary" onClick={ask}>
-                Ask
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirming(false)
-                }}
-              >
-                Cancel
-              </button>
-            </div>
+      {/* With no English in the file there is nothing to translate or learn from. */}
+      {line.englishMissing ? null : (
+        <div className="line-ask">
+          <label className="line-field">
+            <span className="field-label">Hint (optional)</span>
+            <input
+              value={hint}
+              onChange={(event) => {
+                setHint(event.target.value)
+              }}
+            />
+          </label>
+          <div className="line-actions">
+            <button
+              type="button"
+              disabled={busy !== null || confirming}
+              onClick={() => {
+                // A line you wrote, or edited here (even if just saved), is yours.
+                if (line.origin === "manual" || edited.current) {
+                  setConfirming(true)
+                } else {
+                  ask()
+                }
+              }}
+            >
+              Ask AI again
+            </button>
+            <button type="button" disabled={busy !== null} onClick={draftRule}>
+              Make a rule…
+            </button>
           </div>
-        ) : null}
-      </div>
+          {confirming ? (
+            <div className="line-confirm" role="group" aria-label="Confirm">
+              <p>This replaces your translation. Ask anyway?</p>
+              <div className="line-actions">
+                <button type="button" className="primary" onClick={ask}>
+                  Ask
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirming(false)
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
       {busy === null ? null : (
         <p className="muted" role="status">
           {BUSY_TEXT[busy]}

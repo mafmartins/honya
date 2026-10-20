@@ -176,6 +176,39 @@ describe("session page", () => {
     expect(within(first).queryByText("⚑")).toBeNull()
   })
 
+  it("shows lines the file came with in Portuguese as yours, without English", async () => {
+    const api = fakeApi()
+    const id = await withLines(api, [
+      line(0, { english: "", englishMissing: true, words: "Já estava.", origin: "manual" }),
+      line(1, { english: "", englishMissing: true, words: "Também.", origin: "manual" }),
+      line(2, { english: "Run!" }),
+    ])
+    open(api, id)
+    await shown("Já estava.")
+    const [first] = rows()
+    if (first === undefined) throw new Error("Expected a row.")
+    expect(within(first).getByLabelText("English not in this file").textContent).toBe("—")
+    expect(within(first).getByText("you")).toBeTruthy()
+    const note = screen.getByText(/2 lines were already in Portuguese in the file/)
+    fireEvent.click(within(note.parentElement ?? note).getByRole("button", { name: "Dismiss" }))
+    expect(screen.queryByText(/already in Portuguese in the file/)).toBeNull()
+    fireEvent.click(first)
+    const panel = screen.getByRole("complementary", { name: "Line" })
+    expect(within(panel).getByText(/Not in this file/)).toBeTruthy()
+    expect(within(panel).queryByRole("button", { name: "Ask AI again" })).toBeNull()
+    expect(within(panel).queryByRole("button", { name: "Make a rule…" })).toBeNull()
+    fireEvent.click(within(grid()).getByText("Run!"))
+    expect(within(panel).getByRole("button", { name: "Ask AI again" })).toBeTruthy()
+  })
+
+  it("has no Portuguese-in-the-file note for an ordinary script", async () => {
+    const api = fakeApi()
+    const id = await withLines(api, MIXED)
+    open(api, id)
+    await shown("Olá.")
+    expect(screen.queryByText(/already in Portuguese in the file/)).toBeNull()
+  })
+
   it("counts and filters lines, and searches English and Portuguese", async () => {
     const api = fakeApi()
     const id = await withLines(api, MIXED)

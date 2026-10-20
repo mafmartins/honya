@@ -62,6 +62,7 @@ function OpenSession({
   const [search, setSearch] = useState("")
   const [exporting, setExporting] = useState(false)
   const [chosen, setChosen] = useState<number | null>(null)
+  const [seenNoEnglish, setSeenNoEnglish] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLElement>(null)
   const replace = useCallback(
@@ -170,6 +171,14 @@ function OpenSession({
           }}
         />
         {ending === null ? null : <RunNote ending={ending} onRetry={runAi} onDismiss={dismiss} />}
+        {seenNoEnglish ? null : (
+          <NoEnglishNote
+            count={view.lines.filter((line) => line.englishMissing).length}
+            onDismiss={() => {
+              setSeenNoEnglish(true)
+            }}
+          />
+        )}
         <Filters
           lines={view.lines}
           filter={filter}
@@ -245,6 +254,26 @@ function RunNote({
           Try again
         </button>
       ) : null}
+      <button type="button" className="icon-button" aria-label="Dismiss" onClick={onDismiss}>
+        <CloseIcon />
+      </button>
+    </div>
+  )
+}
+
+// Lines the script came with in Portuguese: they are the translator's, with no English.
+function NoEnglishNote({
+  count,
+  onDismiss,
+}: {
+  count: number
+  onDismiss: () => void
+}): React.JSX.Element | null {
+  if (count === 0) return null
+  const lines = count === 1 ? "1 line was" : `${String(count)} lines were`
+  return (
+    <div className="session-note" role="status">
+      <p>{`${lines} already in Portuguese in the file, so they're marked as yours. Their English isn't in the file.`}</p>
       <button type="button" className="icon-button" aria-label="Dismiss" onClick={onDismiss}>
         <CloseIcon />
       </button>

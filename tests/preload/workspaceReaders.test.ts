@@ -22,6 +22,7 @@ const line = {
   end: 5320,
   speaker: "Tanjiro",
   english: "Hi.",
+  englishMissing: false,
   words: "Olá.",
   origin: "ai",
   flag: null,

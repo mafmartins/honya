@@ -209,6 +209,7 @@ export function Shell({ api }: { api: HonyaApi }): React.JSX.Element {
             revision={revision}
             onNavigate={navigate}
             onOpenSession={openSession}
+            onNewSession={startSession}
             onOpenProject={(id) => {
               leave(() => {
                 showProject(id).catch((failure: unknown) => {

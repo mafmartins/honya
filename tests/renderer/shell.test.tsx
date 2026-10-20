@@ -104,6 +104,21 @@ describe("workspace shell", () => {
     expect(within(nav).getByRole("button", { name: new RegExp(FAKE_SCRIPT_NAME) })).toBeTruthy()
   })
 
+  it("starts a new session in the chosen project from the menu", async () => {
+    const api = fakeApi()
+    const { projectId, sessionId } = await withSession(api)
+    await api.setFinished(sessionId, true)
+    await renderShell(api)
+    const nav = menu()
+    expect(within(nav).queryByRole("button", { name: "New session" })).toBeNull()
+    fireEvent.click(await within(nav).findByRole("button", { name: /ep01\.ass/ }))
+    expect(await screen.findByRole("heading", { level: 1, name: FAKE_SCRIPT_NAME })).toBeTruthy()
+    fireEvent.click(within(nav).getByRole("button", { name: "New session" }))
+    expect(await screen.findByRole("button", { name: "Load script" })).toBeTruthy()
+    const sessions = await api.projectSessions(projectId)
+    expect(sessions).toHaveLength(2)
+  })
+
   it("refreshes the session summary when an edit saves the session", async () => {
     const api = fakeApi()
     const { sessionId } = await withSession(api)

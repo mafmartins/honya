@@ -17,6 +17,8 @@ export interface MenuProps {
   // A recent session, with its project.
   onOpenSession: (projectId: string, sessionId: string) => void
   onOpenProject: (id: string) => void
+  // Starts an empty session in the chosen project.
+  onNewSession: (projectId: string) => void
 }
 
 // The left menu: name, project switcher, navigation, recent sessions and a summary
@@ -29,6 +31,7 @@ export function Menu({
   onNavigate,
   onOpenSession,
   onOpenProject,
+  onNewSession,
 }: MenuProps): React.JSX.Element {
   const api = useApi()
   const report = useReport()
@@ -110,6 +113,19 @@ export function Menu({
       <div className="menu-section">
         <ul className="menu-nav">
           {navItem("Session", { page: "session", sessionId }, route.page === "session")}
+          {projectId === null ? null : (
+            <li>
+              <button
+                type="button"
+                className="menu-item"
+                onClick={() => {
+                  onNewSession(projectId)
+                }}
+              >
+                New session
+              </button>
+            </li>
+          )}
           {navItem("Session stats", { page: "stats" }, route.page === "stats")}
           {navItem(
             "Projects",

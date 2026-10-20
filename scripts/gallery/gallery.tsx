@@ -328,6 +328,7 @@ function Window({
             onNavigate={noop}
             onOpenSession={noop}
             onOpenProject={noop}
+            onNewSession={noop}
           />
           <main className="shell-main">{children}</main>
         </div>

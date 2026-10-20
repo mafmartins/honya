@@ -36,6 +36,7 @@ function line(index: number, patch: Partial<LineView> = {}): LineView {
     end: index * 1000 + 800,
     speaker: "Tanjiro",
     english: `English ${String(index)}`,
+    englishMissing: false,
     words: null,
     origin: null,
     flag: null,

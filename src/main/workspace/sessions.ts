@@ -16,10 +16,11 @@ import { readAss, type DialogueCue } from "../../core/ass/script"
 import { isRecord } from "../../core/library/guards"
 import type { FrameSetting, StyleCard, Variant } from "../../core/library/types"
 import type { Preset, ProviderId } from "../../core/pipeline/types"
+import { alreadyPortuguese } from "../../core/session/detect"
 import { acceptLine, addActivity, editLine, emptyLines, isFinished } from "../../core/session/lines"
 import { migrateV2 } from "../../core/session/migrate"
 import { sessionStats, type SessionStats } from "../../core/session/stats"
-import type { LineOrigin, WorkSession } from "../../core/session/types"
+import type { SessionLine, LineOrigin, WorkSession } from "../../core/session/types"
 import type { ListedStyle } from "../ipc/files"
 import type { AppSettings } from "../settingsStore"
 
@@ -42,7 +43,9 @@ export interface LineView {
   start: number
   end: number
   speaker: string
+  // "" when englishMissing: the file already had this line in Portuguese.
   english: string
+  englishMissing: boolean
   words: string | null
   origin: LineOrigin | null
   flag: string | null
@@ -232,17 +235,20 @@ export function createWorkSessions(
       wanted === null ? session.lines : session.lines.filter((line) => wanted.has(line.index))
     return lines.map((line) => {
       const cue = cues.get(line.index)
-      const english = cue?.visible ?? ""
+      // For a line the file had in Portuguese, its own length stands in for the English.
+      const source = cue?.visible ?? ""
+      const missing = line.noEnglish === true
       return {
         index: line.index,
         start: cue?.startMs ?? 0,
         end: cue?.endMs ?? 0,
         speaker: cue?.name ?? "",
-        english,
+        english: missing ? "" : source,
+        englishMissing: missing,
         words: line.words,
         origin: line.origin,
         flag: line.flag,
-        budget: cue === undefined ? 0 : charLimit(english, cue.startMs, cue.endMs, cpsLimit),
+        budget: cue === undefined ? 0 : charLimit(source, cue.startMs, cue.endMs, cpsLimit),
       }
     })
   }
@@ -282,7 +288,16 @@ export function createWorkSessions(
     if (cues.length === 0) {
       throw new Error("This script has no dialogue lines in the chosen styles.")
     }
-    return { ...session, dialogueStyles: styles, lines: emptyLines(cues), edits: [] }
+    // Lines the file already had in Portuguese count as the translator's own work.
+    const translated = alreadyPortuguese(cues)
+    const visible = new Map(cues.map((cue) => [cue.index, cue.visible]))
+    const lines = emptyLines(cues).map((line): SessionLine => {
+      const words = visible.get(line.index)
+      return translated.has(line.index) && words !== undefined
+        ? { ...line, words, origin: "manual", noEnglish: true }
+        : line
+    })
+    return { ...session, dialogueStyles: styles, lines, edits: [] }
   }
 
   return {

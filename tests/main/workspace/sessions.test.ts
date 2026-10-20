@@ -168,6 +168,30 @@ describe("work sessions", () => {
     expect(store.view(id).stats.lines.manual).toBe(1)
   })
 
+  it("marks lines the script already has in Portuguese as the translator's", () => {
+    const { store, files } = setup()
+    files.set(
+      "/x/half.ass",
+      [
+        ...HEAD,
+        "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Então, é por isso, Mickey.",
+        "Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,Tocas muito bem.",
+        "Dialogue: 0,0:00:05.00,0:00:06.00,Default,,0,0,0,,What do they mean?",
+      ].join("\n"),
+    )
+    const id = store.create("p1")
+    const view = store.loadScript(id, "/x/half.ass")
+    expect(
+      view.lines.map((line) => [line.words, line.origin, line.englishMissing, line.english]),
+    ).toEqual([
+      ["Então, é por isso, Mickey.", "manual", true, ""],
+      ["Tocas muito bem.", "manual", true, ""],
+      [null, null, false, "What do they mean?"],
+    ])
+    expect(store.get(id).edits).toEqual([])
+    expect(view.stats.lines).toMatchObject({ manual: 2, untranslated: 1 })
+  })
+
   it("asks for styles when ambiguous, then confirms", () => {
     const { store, files } = setup()
     files.set("/x/a.ass", AMBIGUOUS)

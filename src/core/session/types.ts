@@ -19,6 +19,8 @@ export interface SessionLine {
   strong: boolean
   // Times "Ask AI again" was used.
   retranslated: number
+  // The script already had this line in Portuguese, so its English isn't known.
+  noEnglish?: true
 }
 
 export interface LineEdit {

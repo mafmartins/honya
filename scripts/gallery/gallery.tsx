@@ -80,6 +80,7 @@ function demoLines(translatedUpTo: number): LineView[] {
       end: Math.round((seconds + 2.1) * 1000),
       speaker,
       english,
+      englishMissing: false,
       words: done,
       origin: done === null ? null : origin,
       flag: done === null ? null : (FLAGS.get(index) ?? null),

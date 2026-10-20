@@ -419,6 +419,7 @@ export function readLineView(value: unknown): LineView | null {
     !isCount(value.end) ||
     typeof value.speaker !== "string" ||
     typeof value.english !== "string" ||
+    typeof value.englishMissing !== "boolean" ||
     !(value.words === null || typeof value.words === "string") ||
     !isOrigin(value.origin) ||
     !(value.flag === null || typeof value.flag === "string") ||
@@ -432,6 +433,7 @@ export function readLineView(value: unknown): LineView | null {
     end: value.end,
     speaker: value.speaker,
     english: value.english,
+    englishMissing: value.englishMissing,
     words: value.words,
     origin: value.origin,
     flag: value.flag,

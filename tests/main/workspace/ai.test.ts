@@ -331,6 +331,38 @@ describe("AI service", () => {
     expect(every.grabs).toEqual([1])
   })
 
+  it("won't ask again or draft a rule for a line with no English in the file", async () => {
+    const start = session(5)
+    start.lines = start.lines.map((line) =>
+      line.index === 1
+        ? { ...line, words: "Já em português.", origin: "manual", noEnglish: true }
+        : line,
+    )
+    const { ai, requests } = setup(start)
+    const message = "This line has no English in the file to translate from."
+    await expect(ai.retranslate(ID, 1, "")).rejects.toThrow(message)
+    await expect(ai.draftRule(ID, 1)).rejects.toThrow(message)
+    expect(requests).toHaveLength(0)
+    await ai.retranslate(ID, 2, "")
+    expect(requests[0]?.prompt).toContain("(English not in the file) => Já em português.")
+  })
+
+  it("gives a run no English for lines the script came with in Portuguese", async () => {
+    const start = session(5)
+    start.lines = start.lines.map((line) =>
+      line.index === 1
+        ? { ...line, words: "Já em português.", origin: "manual", noEnglish: true }
+        : line,
+    )
+    const { ai, requests } = setup(start)
+    await ai.run(ID)
+    await ai.idle()
+    const brief = requests.find(isBrief)
+    expect(brief?.prompt).toContain("(already in Portuguese)")
+    const batch = requests.find((request) => !isBrief(request))
+    expect(batch?.prompt).toContain("(English not in the file) => Já em português.")
+  })
+
   it("drafts a rule from a line with the cheap model", async () => {
     const known: Rule[] = [{ kind: "prose", text: "Use tu." }]
     const rule = { kind: "glossary", text: "", source: "Line", pt: "Linha" }

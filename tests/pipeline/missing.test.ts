@@ -125,6 +125,27 @@ describe("translateMissing", () => {
     expect(requestedIds(prompts[0] ?? "")).toEqual(["10", "11", "13", "14"])
   })
 
+  it("never shows a line the script came with in Portuguese as English", async () => {
+    const { complete, requests } = recorded()
+    const known = knownUpTo(10)
+    known.set(9, "Já estava em português.")
+    known.set(12, "Também.")
+    const input = missingInput(20, complete, {
+      known,
+      manual: new Set([9, 12]),
+      noEnglish: new Set([9, 12]),
+      brief: null,
+    })
+    await translateMissing(input)
+    const briefs = requests.filter(isBrief).map((r) => r.prompt)
+    expect(briefs[0]).toContain("[9] (Tanjiro) (already in Portuguese) Line 9.")
+    const prompts = linePrompts(requests)
+    expect(prompts[0]).toContain("(English not in the file) => Já estava em português.")
+    expect(prompts[0]).toContain("(English not in the file) => Também.")
+    expect(prompts[0]).not.toContain("Line 9.")
+    expect(prompts[0]).not.toContain("Line 12.")
+  })
+
   it("shows up to three known lines after the batch as context", async () => {
     const { complete, requests } = recorded()
     const known = knownUpTo(10)

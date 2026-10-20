@@ -154,6 +154,18 @@ export function createAiService(deps: AiServiceDeps): AiService {
     return cue
   }
 
+  // A line the script came with in Portuguese has no English to work from.
+  const withEnglish = (session: WorkSession, index: number): DialogueCue => {
+    const cue = cueOf(session, index)
+    if (session.lines.some((line) => line.index === index && line.noEnglish === true)) {
+      throw new Error("This line has no English in the file to translate from.")
+    }
+    return cue
+  }
+
+  const noEnglishOf = (session: WorkSession): Set<number> =>
+    new Set(session.lines.filter((line) => line.noEnglish === true).map((line) => line.index))
+
   // The cached frame for the line, else a fresh grab saved to the cache.
   const frameBytes = async (session: WorkSession, cue: DialogueCue): Promise<Uint8Array | null> => {
     const videoPath = session.videoPath
@@ -317,6 +329,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
           ...(frames === undefined ? {} : { frames }),
           known,
           manual,
+          noEnglish: noEnglishOf(start),
           brief: start.brief,
           glossary: start.glossary,
           shouldStop: () => stopRequested,
@@ -406,7 +419,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
 
     async retranslate(sessionId, index, hint) {
       const session = deps.sessions.get(sessionId)
-      const cue = cueOf(session, index)
+      const cue = withEnglish(session, index)
       const { complete, flush } = spending(session.provider, () => undefined)
       // Like a run: every line with "every", only the brief's marked lines with "marked".
       const wantsFrame =
@@ -433,6 +446,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
           index,
           hint,
           known,
+          noEnglish: noEnglishOf(session),
           brief: session.brief,
           glossary: session.glossary,
           ...(image === null ? {} : { image }),
@@ -458,7 +472,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
 
     async draftRule(sessionId, index) {
       const session = deps.sessions.get(sessionId)
-      const cue = cueOf(session, index)
+      const cue = withEnglish(session, index)
       const line = session.lines.find((item) => item.index === index)
       if (line === undefined || line.words === null) {
         throw new Error("This line has no translation to learn from.")

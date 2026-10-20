@@ -140,17 +140,17 @@ export function batchPrompt(
   }
   if (previous.length > 0) {
     parts.push(
-      `The lines just before, already translated (context only):\n${previous.map((p) => `${p.english} => ${p.pt}`).join("\n")}`,
+      `The lines just before, already translated (context only):\n${previous.map(pair).join("\n")}`,
     )
   }
   if (fixed.length > 0) {
     parts.push(
-      `Already translated by the translator (keep these, context only):\n${fixed.map((p) => `${p.english} => ${p.pt}`).join("\n")}`,
+      `Already translated by the translator (keep these, context only):\n${fixed.map(pair).join("\n")}`,
     )
   }
   if (next.length > 0) {
     parts.push(
-      `The lines just after, already translated (context only):\n${next.map((p) => `${p.english} => ${p.pt}`).join("\n")}`,
+      `The lines just after, already translated (context only):\n${next.map(pair).join("\n")}`,
     )
   }
   parts.push(
@@ -203,7 +203,9 @@ export function retranslatePrompt(
     )
   }
   const shown = (items: readonly { english: string; pt?: string }[]): string =>
-    items.map((p) => (p.pt === undefined ? p.english : `${p.english} => ${p.pt}`)).join("\n")
+    items
+      .map((p) => (p.pt === undefined ? p.english : pair({ english: p.english, pt: p.pt })))
+      .join("\n")
   if (context.before.length > 0) {
     parts.push(`The lines just before (context only):\n${shown(context.before)}`)
   }
@@ -262,8 +264,18 @@ export function briefSystem(variant: Variant, framesWanted: boolean): string {
   ].join("\n\n")
 }
 
-export function briefPrompt(cues: readonly DialogueCue[]): string {
-  return `The episode, each line as [id] (speaker) English:\n${cues.map((cue) => `[${String(cue.index)}] ${speaker(cue)}${oneLine(cue.visible)}`).join("\n")}`
+export function briefPrompt(
+  cues: readonly DialogueCue[],
+  // Lines the script already had in Portuguese.
+  noEnglish: ReadonlySet<number> = new Set(),
+): string {
+  return `The episode, each line as [id] (speaker) English:\n${cues.map((cue) => `[${String(cue.index)}] ${speaker(cue)}${noEnglish.has(cue.index) ? "(already in Portuguese) " : ""}${oneLine(cue.visible)}`).join("\n")}`
+}
+
+// A line that already has Portuguese, shown as context. A line the script came with in
+// Portuguese has no English to show.
+function pair(line: { english: string; pt: string }): string {
+  return `${line.english === "" ? "(English not in the file)" : line.english} => ${line.pt}`
 }
 
 function cueLine(cue: DialogueCue, cpsLimit: number): string {

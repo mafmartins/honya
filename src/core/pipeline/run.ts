@@ -64,6 +64,8 @@ export interface MissingInput {
   known: ReadonlyMap<number, string>
   // Which of `known` the translator wrote.
   manual: ReadonlySet<number>
+  // Lines the script already had in Portuguese: their English isn't known.
+  noEnglish?: ReadonlySet<number>
   brief: SessionBrief | null
   glossary: { source: string; pt: string }[]
   shouldStop: () => boolean
@@ -117,12 +119,13 @@ interface BatchContext {
 }
 
 export async function translateMissing(input: MissingInput): Promise<"done" | "stopped"> {
+  const noEnglish = input.noEnglish ?? NONE
   const cues = readAss(input.ass).filter((cue) => input.dialogueStyles.has(cue.style))
   let glossary = addGlossary(emptyGlossary(), input.glossary)
   let brief = input.brief
   if (brief === null) {
     input.onEvent?.({ type: "brief" })
-    const asked = await requestBrief(input, cues, input.frameSetting)
+    const asked = await requestBrief(input, cues, input.frameSetting, noEnglish)
     brief = { summary: asked.summary, hardIds: asked.hard, frameIds: asked.frames }
     glossary = addGlossary(glossary, asked.terms)
     input.onBrief?.(brief, glossary.entries)
@@ -161,15 +164,15 @@ export async function translateMissing(input: MissingInput): Promise<"done" | "s
       frames: input.frames ?? NO_FRAMES,
       hardIds,
       frameIds,
-      previous: knownBefore(cues, cues.indexOf(first), pt),
-      next: knownAfter(cues, cues.indexOf(last), pt),
+      previous: knownBefore(cues, cues.indexOf(first), pt, noEnglish),
+      next: knownAfter(cues, cues.indexOf(last), pt, noEnglish),
       fixed: cues.flatMap((cue) => {
         const words = pt.get(cue.index)
         return input.manual.has(cue.index) &&
           cue.index > first.index &&
           cue.index < last.index &&
           words !== undefined
-          ? [{ english: cue.visible, pt: words }]
+          ? [{ english: englishOf(cue, noEnglish), pt: words }]
           : []
       }),
     }
@@ -207,6 +210,8 @@ export interface RetranslateInput {
   // What the translator told the AI about this line; may be empty.
   hint: string
   known: ReadonlyMap<number, string>
+  // Lines the script already had in Portuguese: their English isn't known.
+  noEnglish?: ReadonlySet<number>
   brief: SessionBrief | null
   glossary: { source: string; pt: string }[]
   image?: Uint8Array
@@ -245,7 +250,8 @@ export async function retranslateLine(input: RetranslateInput): Promise<AiLine |
   const around = (items: readonly DialogueCue[]) =>
     items.map((item) => {
       const words = input.known.get(item.index)
-      return words === undefined ? { english: item.visible } : { english: item.visible, pt: words }
+      const english = englishOf(item, input.noEnglish ?? NONE)
+      return words === undefined ? { english } : { english, pt: words }
     })
   const answer = await ask(context, "strong", [cue], () =>
     retranslatePrompt(
@@ -268,18 +274,26 @@ export async function retranslateLine(input: RetranslateInput): Promise<AiLine |
   return { index: cue.index, words: done.line.words, flag: done.note, strong: true }
 }
 
+const NONE: ReadonlySet<number> = new Set()
+
+// The English of a line, or "" when the script came with it already in Portuguese.
+function englishOf(cue: DialogueCue, noEnglish: ReadonlySet<number>): string {
+  return noEnglish.has(cue.index) ? "" : cue.visible
+}
+
 // Up to CONTEXT_LINES of the nearest lines before `position` that have Portuguese.
 function knownBefore(
   cues: readonly DialogueCue[],
   position: number,
   pt: ReadonlyMap<number, string>,
+  noEnglish: ReadonlySet<number>,
 ): { english: string; pt: string }[] {
   const previous: { english: string; pt: string }[] = []
   for (let i = position - 1; i >= 0 && previous.length < CONTEXT_LINES; i -= 1) {
     const cue = cues[i]
     const words = cue === undefined ? undefined : pt.get(cue.index)
     if (cue !== undefined && words !== undefined) {
-      previous.unshift({ english: cue.visible, pt: words })
+      previous.unshift({ english: englishOf(cue, noEnglish), pt: words })
     }
   }
   return previous
@@ -290,13 +304,14 @@ function knownAfter(
   cues: readonly DialogueCue[],
   position: number,
   pt: ReadonlyMap<number, string>,
+  noEnglish: ReadonlySet<number>,
 ): { english: string; pt: string }[] {
   const next: { english: string; pt: string }[] = []
   for (let i = position + 1; i < cues.length && next.length < CONTEXT_LINES; i += 1) {
     const cue = cues[i]
     const words = cue === undefined ? undefined : pt.get(cue.index)
     if (cue !== undefined && words !== undefined) {
-      next.push({ english: cue.visible, pt: words })
+      next.push({ english: englishOf(cue, noEnglish), pt: words })
     }
   }
   return next
@@ -306,12 +321,13 @@ async function requestBrief(
   input: Engine,
   cues: readonly DialogueCue[],
   frameSetting: FrameSetting,
+  noEnglish: ReadonlySet<number>,
 ): Promise<{ summary: string; terms: Term[]; hard: string[]; frames: string[] }> {
   const unavailable = { summary: BRIEF_UNAVAILABLE, terms: [], hard: [], frames: [] }
   const reply = await input.complete({
     tier: "cheap",
     system: briefSystem(input.card.variant, frameSetting === "marked"),
-    prompt: briefPrompt(cues),
+    prompt: briefPrompt(cues, noEnglish),
     schema: BRIEF_SCHEMA,
   })
   if ("refused" in reply) {

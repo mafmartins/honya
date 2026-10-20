@@ -39,6 +39,7 @@ export function ExportDialog({
   owner,
   styleOwner,
   onClose,
+  onNextEpisode,
 }: {
   sessionId: string
   // Whether you edited lines: the preview then asks the AI for rule suggestions.
@@ -46,6 +47,8 @@ export function ExportDialog({
   owner: Owner
   styleOwner: Extract<Owner, { kind: "style" }>
   onClose: () => void
+  // Starts a new session in the same project once the file is saved.
+  onNextEpisode?: () => void
 }): React.JSX.Element {
   const api = useApi()
   const [preview, setPreview] = useState<ExportPreview | null>(null)
@@ -139,9 +142,18 @@ export function ExportDialog({
             >
               Show in Finder
             </button>
-            <button type="button" className="primary" onClick={onClose}>
+            <button
+              type="button"
+              className={onNextEpisode === undefined ? "primary" : undefined}
+              onClick={onClose}
+            >
               Done
             </button>
+            {onNextEpisode === undefined ? null : (
+              <button type="button" className="primary" onClick={onNextEpisode}>
+                Start the next episode
+              </button>
+            )}
           </div>
         </div>
       </Dialog>

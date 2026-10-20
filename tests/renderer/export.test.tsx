@@ -207,7 +207,27 @@ describe("export dialog", () => {
     await waitFor(() => {
       expect(reveal).toHaveBeenCalledWith(expect.stringMatching(/\.pt-pt\.ass$/))
     })
+    expect(within(dialog).queryByRole("button", { name: "Start the next episode" })).toBeNull()
     fireEvent.click(within(dialog).getByRole("button", { name: "Done" }))
+    expect(screen.queryByRole("dialog", { name: "Export" })).toBeNull()
+  })
+
+  it("offers to start the next episode in the same project once saved", async () => {
+    const api = fakeApi()
+    const { id, projectId } = await translatedSession(api)
+    const next = vi.fn()
+    render(
+      <ApiContext.Provider value={api}>
+        <SessionPage sessionId={id} onNewSession={next} />
+      </ApiContext.Provider>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Export…" }))
+    const dialog = await screen.findByRole("dialog", { name: "Export" })
+    await within(dialog).findByText("Rule suggestions from your edits")
+    expect(within(dialog).queryByRole("button", { name: "Start the next episode" })).toBeNull()
+    fireEvent.click(within(dialog).getByRole("button", { name: "Export" }))
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Start the next episode" }))
+    expect(next).toHaveBeenCalledWith(projectId)
     expect(screen.queryByRole("dialog", { name: "Export" })).toBeNull()
   })
 

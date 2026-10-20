@@ -25,10 +25,13 @@ const NOT_WORKING: ReadonlySet<number> = new Set()
 export function SessionPage({
   sessionId,
   onBack,
+  onNewSession,
 }: {
   sessionId: string | null
   // Leaves a session that couldn't be opened for the projects page.
   onBack?: () => void
+  // Starts an empty session in a project, offered once an export is saved.
+  onNewSession?: (projectId: string) => void
 }): React.JSX.Element {
   if (sessionId === null) {
     return (
@@ -42,15 +45,17 @@ export function SessionPage({
       </section>
     )
   }
-  return <OpenSession key={sessionId} id={sessionId} onBack={onBack} />
+  return <OpenSession key={sessionId} id={sessionId} onBack={onBack} onNewSession={onNewSession} />
 }
 
 function OpenSession({
   id,
   onBack,
+  onNewSession,
 }: {
   id: string
   onBack: (() => void) | undefined
+  onNewSession: ((projectId: string) => void) | undefined
 }): React.JSX.Element {
   const api = useApi()
   const act = useAction()
@@ -223,6 +228,14 @@ function OpenSession({
               setExporting(false)
               listRef.current?.focus()
             }}
+            {...(onNewSession === undefined
+              ? {}
+              : {
+                  onNextEpisode: () => {
+                    setExporting(false)
+                    onNewSession(view.projectId)
+                  },
+                })}
           />
         ) : null}
       </section>

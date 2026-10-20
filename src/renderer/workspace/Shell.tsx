@@ -323,6 +323,7 @@ function Page({
           onBack={() => {
             onNavigate({ page: "projects" })
           }}
+          onNewSession={actions.onNewSession}
         />
       )
     case "stats":

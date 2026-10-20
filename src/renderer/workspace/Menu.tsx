@@ -113,19 +113,6 @@ export function Menu({
       <div className="menu-section">
         <ul className="menu-nav">
           {navItem("Session", { page: "session", sessionId }, route.page === "session")}
-          {projectId === null ? null : (
-            <li>
-              <button
-                type="button"
-                className="menu-item"
-                onClick={() => {
-                  onNewSession(projectId)
-                }}
-              >
-                New session
-              </button>
-            </li>
-          )}
           {navItem("Session stats", { page: "stats" }, route.page === "stats")}
           {navItem(
             "Projects",
@@ -143,9 +130,23 @@ export function Menu({
         </ul>
       </div>
       <section className="menu-section" aria-labelledby="menu-recent">
-        <h2 className="menu-label" id="menu-recent">
-          Recent sessions
-        </h2>
+        <div className="menu-heading">
+          <h2 className="menu-label" id="menu-recent">
+            Recent sessions
+          </h2>
+          {projectId === null ? null : (
+            <button
+              type="button"
+              className="menu-new"
+              title="Start a new session in this project"
+              onClick={() => {
+                onNewSession(projectId)
+              }}
+            >
+              + New
+            </button>
+          )}
+        </div>
         {recent.length === 0 ? (
           <p className="menu-meta">No sessions yet.</p>
         ) : (

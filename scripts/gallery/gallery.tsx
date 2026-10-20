@@ -207,6 +207,8 @@ async function demo(
     sessionStats: (id) => (own(id) ? Promise.resolve(demoStats(lines)) : base.sessionStats(id)),
     exportPreview: (id) => (own(id) ? Promise.resolve(preview) : base.exportPreview(id)),
     pickExportPath: (path) => Promise.resolve(path),
+    exportWrite: (id, path, rules) =>
+      own(id) ? Promise.resolve({ path }) : base.exportWrite(id, path, rules),
     aiActive: () => Promise.resolve(options.running === true ? sessionId : null),
     recentSessions: () => Promise.resolve([summary(), first(), ...others]),
     projectSessions: (id) =>
@@ -487,6 +489,17 @@ async function frames(): Promise<FrameSpec[]> {
       node: sessionWindow(main, <SessionPage sessionId={main.sessionId} />),
       steps: async (root) => {
         ;(await findButton(root, "Export…")).click()
+      },
+    },
+    {
+      key: "export-saved",
+      title: "Export dialog · saved",
+      node: sessionWindow(main, <SessionPage sessionId={main.sessionId} onNewSession={noop} />),
+      steps: async (root) => {
+        ;(await findButton(root, "Export…")).click()
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        ;(await findButton(root, "Export")).click()
+        await findButton(root, "Start the next episode")
       },
     },
     {
